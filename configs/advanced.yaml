@@ -1,0 +1,35 @@
+# Quality-oriented setup: multi-query + rerank + compression + Qdrant,
+# with document grading and answer self-check enabled.
+# Only the differences from the built-in defaults are listed.
+# Requires: pip install 'ragchatbot[qdrant,local]'.
+
+splitter:
+  type: markdown_header
+  chunk_size: 800
+  chunk_overlap: 120
+
+vector_store:
+  type: qdrant
+  collection: ragchatbot-advanced
+
+retrieval:
+  strategy: hybrid
+  k: 10
+  fetch_k: 40
+
+query_transform:
+  type: multi_query
+  num_queries: 3
+
+reranker:
+  type: cross_encoder
+  top_n: 5
+
+compression:
+  type: redundant_filter
+  similarity_threshold: 0.9
+
+generation:
+  prompt_template: strict_citations
+  grade_documents: true
+  self_check: true

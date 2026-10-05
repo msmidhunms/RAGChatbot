@@ -195,3 +195,5 @@ cython_debug/
 .cursorindexingignore
 # RAG chatbot local data (vector store, record manager, chat history)
 storage/
+# RAG runtime data (vector indexes, caches, sessions, eval reports)
+data/

@@ -1,0 +1,138 @@
+# Default RAG configuration: Gemini + Chroma + recursive chunking + hybrid retrieval.
+# Every key is optional; anything omitted falls back to the built-in default
+# (which this file mirrors exactly). Override at runtime with
+#   RAG__SECTION__KEY=value          e.g. RAG__RETRIEVAL__K=10
+#   --set section.key=value          e.g. --set splitter.chunk_size=500
+# Relative paths resolve against the current working directory.
+# Secrets are never stored here: set GOOGLE_API_KEY etc. in .env.
+
+app:
+  name: ragchatbot
+  log_level: INFO                 # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  data_dir: ./data
+
+llm:
+  provider: google_genai          # google_genai | openai | anthropic | ollama
+  model: gemini-1.5-flash
+  temperature: 0.1
+  max_tokens: 1024
+  timeout: 60
+  max_retries: 2
+  structured_output: true         # answer as RAGAnswer (answer, citations, confidence)
+  base_url: null                  # e.g. http://localhost:11434 for a remote Ollama
+
+embeddings:
+  provider: google                # google | openai | ollama | huggingface
+  model: models/text-embedding-004
+  batch_size: 64
+  normalize: true
+  base_url: null
+  cache:
+    enabled: true
+    path: ./data/emb_cache
+
+ingestion:
+  sources: [./docs]               # files, directories or URLs
+  glob: "**/*"
+  exclude: []                     # glob patterns to skip
+  loaders:                        # per-extension loader override
+    pdf: pypdf                    # pypdf | pymupdf
+    html: bs4
+  csv:
+    content_columns: null         # null = all columns
+    metadata_columns: []
+  json:
+    jq_schema: "."
+    content_key: null
+    json_lines: false
+  url:
+    recursive: false
+    max_depth: 2
+  cleaning:
+    normalize_whitespace: true
+    strip_headers_footers: false
+    min_chars: 30                 # drop chunks shorter than this
+  dedupe:
+    enabled: true
+    strategy: hash                # hash | none
+  incremental: true               # skip unchanged files on re-ingest
+
+splitter:
+  type: recursive                 # recursive | token | markdown_header | semantic | html_header
+  chunk_size: 1000
+  chunk_overlap: 150
+  separators: null
+  encoding_name: cl100k_base      # token splitter
+  headers: ["#", "##", "###"]     # markdown_header / html_header
+  semantic_breakpoint: percentile # percentile | standard_deviation | interquartile | gradient
+
+vector_store:
+  type: chroma                    # chroma | faiss | qdrant | pgvector
+  collection: ragchatbot
+  distance: cosine                # cosine | l2 | ip
+  chroma:
+    persist_dir: ./data/chroma
+  faiss:
+    index_dir: ./data/faiss
+  qdrant:
+    url: null                     # set to use a server, else local `path`
+    path: ./data/qdrant
+    api_key_env: QDRANT_API_KEY
+  pgvector:
+    connection_env: PG_CONN       # env var holding the Postgres connection string
+
+retrieval:
+  strategy: hybrid                # dense | sparse | hybrid | parent
+  search_type: mmr                # similarity | mmr | threshold
+  k: 6
+  fetch_k: 24
+  mmr_lambda: 0.5
+  score_threshold: null           # required when search_type = threshold
+  hybrid:
+    weights: [0.6, 0.4]           # [dense, sparse]
+    fusion: rrf                   # weighted | rrf
+    rrf_k: 60
+  parent:
+    parent_chunk_size: 2000
+    child_chunk_size: 400
+  filters: {}                     # default metadata filter, e.g. {source: a.pdf}
+
+query_transform:
+  type: none                      # none | rewrite | multi_query | hyde | step_back
+  num_queries: 3
+  condense_with_history: true
+
+reranker:
+  type: none                      # none | cross_encoder | cohere | llm
+  model: BAAI/bge-reranker-base
+  top_n: 4
+
+compression:
+  type: none                      # none | llm_extract | embeddings_filter | redundant_filter
+  similarity_threshold: 0.75
+
+generation:
+  prompt_template: default        # default | concise | detailed | strict_citations | path/to/file.txt
+  max_context_tokens: 6000
+  citation_style: numeric         # numeric | inline_source | none
+  answer_when_no_context: refuse  # refuse | general_knowledge
+  grade_documents: false          # grade retrieved chunks, rewrite query if irrelevant
+  self_check: false               # verify the answer is grounded, regenerate if not
+  max_retries: 1
+
+memory:
+  type: window                    # none | buffer | window | summary
+  window_size: 6
+  checkpointer: sqlite            # memory | sqlite
+  path: ./data/sessions.sqlite
+
+evaluation:
+  dataset: ./tests/fixtures/qa.jsonl
+  metrics: [hit_rate, mrr, faithfulness, answer_relevance]
+  judge_llm: null                 # null = reuse llm
+  output_dir: ./data/eval
+
+observability:
+  langsmith: false
+  project: ragchatbot
+  log_timings: true
