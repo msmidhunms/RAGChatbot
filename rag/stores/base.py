@@ -4,7 +4,14 @@ Backends implement ``_upsert``, ``delete``, ``_query``, ``count`` and
 ``_reset``. The base class embeds text exactly once per call, records which
 embedding model built the collection (so a later model switch fails loudly
 instead of returning garbage), and implements MMR for every backend.
-Scores returned by ``search`` are always "higher is better".
+Scores returned by ``search`` are always "higher is better" and mean the
+same thing on every backend:
+
+- ``cosine``: cosine similarity in [-1, 1]
+- ``ip``: the dot product
+- ``l2``: ``1 / (1 + euclidean distance)``
+
+so ``retrieval.score_threshold`` behaves identically whichever store is used.
 """
 
 from __future__ import annotations
@@ -34,13 +41,15 @@ class Hit:
     vector: list[float] | None = None
 
 
-def similarity_from_distance(distance: str, value: float) -> float:
-    """Map a backend distance to a similarity where higher is better."""
-    if distance == "cosine":
-        return 1.0 - value  # cosine distance = 1 - cos
-    if distance == "ip":
-        return 1.0 - value  # chroma/pg inner-product distance = 1 - dot
-    return 1.0 / (1.0 + value)  # l2
+def from_cosine_distance(distance: float) -> float:
+    """Cosine distance (1 - cos) -> cosine similarity."""
+    return 1.0 - float(distance)
+
+
+def from_l2(distance: float, *, squared: bool) -> float:
+    """Euclidean distance (optionally squared, as Chroma/FAISS report it) -> 1 / (1 + d)."""
+    d = max(float(distance), 0.0)
+    return 1.0 / (1.0 + (d**0.5 if squared else d))
 
 
 def mmr_select(query: np.ndarray, candidates: np.ndarray, k: int, lambda_mult: float) -> list[int]:
@@ -83,6 +92,8 @@ class VectorStore(ABC):
         return {}
 
     def check_compatible(self) -> None:
+        # Stores filled from another machine (shared Qdrant/pgvector) have no local
+        # record of their embedding model; the guard then cannot run.
         built_with = self.meta().get("embedding")
         if built_with and built_with != self.namespace:
             raise ConfigError(
@@ -124,16 +135,12 @@ class VectorStore(ABC):
 
     def search(self, query: str, k: int, flt: Mapping[str, Any] | None = None) -> list[Hit]:
         self.check_compatible()
-        if not self.meta():
-            return []  # nothing ingested yet
         return self._query(self.embed_query(query), k, flt)[:k]
 
     def mmr_search(
         self, query: str, k: int, fetch_k: int, lambda_mult: float, flt: Mapping[str, Any] | None = None
     ) -> list[Hit]:
         self.check_compatible()
-        if not self.meta():
-            return []
         qvec = self.embed_query(query)
         hits = self._query(qvec, max(fetch_k, k), flt, with_vectors=True)
         missing = [h for h in hits if h.vector is None]

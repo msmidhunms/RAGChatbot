@@ -20,7 +20,7 @@ from langchain_core.embeddings import Embeddings
 
 from rag.config.schema import VectorStoreConfig
 from rag.core.registry import require
-from rag.stores.base import STORES, Hit, VectorStore
+from rag.stores.base import STORES, Hit, VectorStore, from_l2
 from rag.stores.filters import matches
 
 
@@ -90,10 +90,8 @@ class FAISSStore(VectorStore):
 
     def _score(self, raw: float) -> float:
         if self.cfg.distance == "l2":
-            return 1.0 / (1.0 + float(raw))
-        if self.cfg.distance == "cosine":
-            return (1.0 + float(raw)) / 2.0  # cos in [-1, 1] -> [0, 1]
-        return float(raw)
+            return from_l2(raw, squared=True)  # IndexFlatL2 reports squared L2
+        return float(raw)  # inner product; equals cosine for the normalized vectors
 
     def _query(
         self, vector: list[float], k: int, flt: Mapping[str, Any] | None, with_vectors: bool = False

@@ -17,7 +17,7 @@ from langchain_core.embeddings import Embeddings
 
 from rag.config.schema import VectorStoreConfig
 from rag.core.registry import require
-from rag.stores.base import STORES, Hit, VectorStore
+from rag.stores.base import STORES, Hit, VectorStore, from_l2
 from rag.stores.filters import to_qdrant
 
 CONTENT_KEY = "page_content"
@@ -78,11 +78,9 @@ class QdrantStore(VectorStore):
             )
 
     def _score(self, raw: float) -> float:
-        if self.cfg.distance == "cosine":
-            return (1.0 + raw) / 2.0
         if self.cfg.distance == "l2":
-            return 1.0 / (1.0 + raw)
-        return raw
+            return from_l2(raw, squared=False)  # qdrant reports plain euclidean distance
+        return raw  # cosine similarity / dot product as-is
 
     def _query(
         self, vector: list[float], k: int, flt: Mapping[str, Any] | None, with_vectors: bool = False

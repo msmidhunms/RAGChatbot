@@ -201,3 +201,68 @@ def test_docstore(tmp_path):
     assert ds.count(PARENT) == 0 and ds.count() == 2
     ds.reset()
     assert ds.count() == 0
+
+
+# ------------------------------------------------- cross-backend score convention
+class FixedEmbeddings:
+    """Exact 2-d vectors so expected scores can be computed by hand."""
+
+    # zero-padded to the keyword embedding size: pgvector keeps every collection in one
+    # table and cannot compare vectors of different lengths; padding changes no score
+    VECS = {k: v + [0.0] * 254 for k, v in {"a": [3.0, 4.0], "b": [1.0, 0.0], "q": [0.0, 1.0]}.items()}
+
+    def embed_documents(self, texts):
+        return [self.VECS[t] for t in texts]
+
+    def embed_query(self, text):
+        return self.VECS[text]
+
+
+EXPECTED = {
+    # query q=(0,1) against a=(3,4): cos=0.8, dot=4, euclid=sqrt(18)
+    "cosine": 0.8,
+    "ip": 4.0,
+    "l2": 1.0 / (1.0 + 18**0.5),
+}
+
+
+@pytest.mark.parametrize("distance", ["cosine", "ip", "l2"])
+@pytest.mark.parametrize("kind", BACKENDS)
+def test_scores_consistent_across_backends(kind, distance, tmp_path):
+    from langchain_core.embeddings import Embeddings
+
+    emb = type("E", (FixedEmbeddings, Embeddings), {})()
+    store = make(kind, tmp_path, emb, collection=f"score-{distance}", distance=distance)
+    store.reset()
+    store.add([Document(page_content=t, metadata={"chunk_id": t * 32}, id=t * 32) for t in ("a", "b")])
+    hits = {h.document.page_content: h.score for h in store.search("q", k=2)}
+    assert hits["a"] == pytest.approx(EXPECTED[distance], rel=1e-3)
+
+
+@pytest.mark.parametrize("kind", [p for p in BACKENDS if p.id not in ("memory", "pgvector")])
+def test_search_without_meta_sidecar(kind, tmp_path, keyword_embeddings):
+    store = make(kind, tmp_path, keyword_embeddings)
+    store.add(docs())
+    store._meta_path.unlink()  # e.g. a shared server populated from another machine
+    assert store.search("espresso", k=1)[0].document.page_content.startswith("Espresso")
+    assert store.mmr_search("espresso", k=1, fetch_k=3, lambda_mult=0.5)
+
+
+@pytest.mark.parametrize("kind", [p for p in BACKENDS if p.id != "memory"])
+def test_collections_with_same_chunk_ids_are_independent(kind, tmp_path, keyword_embeddings):
+    # the same file indexed by two configs produces identical chunk ids
+    first = make(kind, tmp_path, keyword_embeddings, collection="col-one")
+    first.reset()
+    first.add(docs())
+    if kind == "qdrant":
+        first._client.close()
+        second = make(kind, tmp_path, keyword_embeddings, collection="col-two")
+    else:
+        second = make(kind, tmp_path, keyword_embeddings, collection="col-two")
+    second.reset()
+    second.add(docs()[:1])
+    second.delete(["a" * 32])
+    if kind == "qdrant":
+        second._client.close()
+        first = make(kind, tmp_path, keyword_embeddings, collection="col-one")
+    assert len(first.search("planet", k=10)) == 4
