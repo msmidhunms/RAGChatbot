@@ -1,0 +1,21 @@
+# Fully offline setup: Ollama chat model + HuggingFace embeddings + FAISS.
+# Only the differences from the built-in defaults are listed.
+# Requires: pip install 'ragchatbot[local,faiss]' and `ollama pull llama3.1`.
+
+llm:
+  provider: ollama
+  model: llama3.1
+  base_url: http://localhost:11434
+
+embeddings:
+  provider: huggingface
+  model: sentence-transformers/all-MiniLM-L6-v2
+
+vector_store:
+  type: faiss
+  collection: ragchatbot-local
+
+reranker:
+  type: cross_encoder
+  model: BAAI/bge-reranker-base
+  top_n: 4
