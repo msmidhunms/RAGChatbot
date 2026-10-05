@@ -61,3 +61,32 @@ def test_configure_logging_idempotent():
 def test_require_core_dependency_message():
     with pytest.raises(MissingDependencyError, match="pip install -r requirements.txt"):
         require("definitely_not_installed_module_xyz")
+
+
+def test_setup_tracing(monkeypatch):
+    from rag.config.schema import ObservabilityConfig
+    from rag.observability.tracing import setup_tracing
+
+    monkeypatch.delenv("LANGSMITH_TRACING", raising=False)
+    monkeypatch.delenv("LANGSMITH_PROJECT", raising=False)
+    setup_tracing(ObservabilityConfig(langsmith=False))
+    import os
+
+    assert "LANGSMITH_TRACING" not in os.environ
+    setup_tracing(ObservabilityConfig(langsmith=True, project="p1"))
+    assert os.environ["LANGSMITH_TRACING"] == "true" and os.environ["LANGSMITH_PROJECT"] == "p1"
+
+
+def test_logging_follows_stderr_swaps(capsys):
+    import io
+    import sys
+
+    logger = configure_logging("INFO")
+    swapped = io.StringIO()
+    old, sys.stderr = sys.stderr, swapped
+    try:
+        get_logger("t").info("hello")
+    finally:
+        sys.stderr = old
+    assert "hello" in swapped.getvalue()
+    assert logger.handlers
