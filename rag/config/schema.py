@@ -38,7 +38,7 @@ EmbeddingProvider = Literal["google", "openai", "ollama", "huggingface"]
 
 class LLMConfig(StrictModel):
     provider: LLMProvider = "google_genai"
-    model: str = "gemini-1.5-flash"
+    model: str = "gemini-3.5-flash"
     temperature: float = Field(0.1, ge=0.0, le=2.0)
     max_tokens: int | None = Field(1024, gt=0)
     timeout: float | None = Field(60, gt=0)
@@ -54,7 +54,7 @@ class EmbeddingCacheConfig(StrictModel):
 
 class EmbeddingsConfig(StrictModel):
     provider: EmbeddingProvider = "google"
-    model: str = "models/text-embedding-004"
+    model: str = "models/gemini-embedding-001"
     batch_size: int = Field(64, gt=0)
     normalize: bool = True
     base_url: str | None = None

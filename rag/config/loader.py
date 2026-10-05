@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from rag.config.schema import RAGConfig
-from rag.core.exceptions import ConfigError
+from rag.core.exceptions import ConfigError, MissingCredentialsError
 
 ENV_PREFIX = "RAG__"
 CONFIG_PATH_ENV = "RAG_CONFIG"
@@ -140,8 +140,8 @@ def dump_config(cfg: RAGConfig) -> dict[str, Any]:
 
 
 # ----------------------------------------------------------------- credentials
-_LLM_KEYS = {"google_genai": "GOOGLE_API_KEY", "openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
-_EMBEDDING_KEYS = {"google": "GOOGLE_API_KEY", "openai": "OPENAI_API_KEY"}
+LLM_KEY_ENV = {"google_genai": "GOOGLE_API_KEY", "openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+EMBEDDING_KEY_ENV = {"google": "GOOGLE_API_KEY", "openai": "OPENAI_API_KEY"}
 
 
 def required_env_vars(cfg: RAGConfig) -> dict[str, str]:
@@ -152,11 +152,11 @@ def required_env_vars(cfg: RAGConfig) -> dict[str, str]:
         if var:
             needed.setdefault(var, why)
 
-    need(_LLM_KEYS.get(cfg.llm.provider), f"llm.provider={cfg.llm.provider}")
-    need(_EMBEDDING_KEYS.get(cfg.embeddings.provider), f"embeddings.provider={cfg.embeddings.provider}")
+    need(LLM_KEY_ENV.get(cfg.llm.provider), f"llm.provider={cfg.llm.provider}")
+    need(EMBEDDING_KEY_ENV.get(cfg.embeddings.provider), f"embeddings.provider={cfg.embeddings.provider}")
     judge = cfg.evaluation.judge_llm
     if judge is not None:
-        need(_LLM_KEYS.get(judge.provider), f"evaluation.judge_llm.provider={judge.provider}")
+        need(LLM_KEY_ENV.get(judge.provider), f"evaluation.judge_llm.provider={judge.provider}")
     if cfg.reranker.type == "cohere":
         need("COHERE_API_KEY", "reranker.type=cohere")
     if cfg.vector_store.type == "pgvector":
@@ -170,3 +170,12 @@ def missing_env_vars(cfg: RAGConfig, env: Mapping[str, str] | None = None) -> di
     """Subset of ``required_env_vars`` that is unset or empty."""
     env = os.environ if env is None else env
     return {var: why for var, why in required_env_vars(cfg).items() if not env.get(var)}
+
+
+def ensure_env(var: str | None, why: str, env: Mapping[str, str] | None = None) -> None:
+    """Raise ``MissingCredentialsError`` if ``var`` is unset or empty."""
+    env = os.environ if env is None else env
+    if var and not env.get(var):
+        raise MissingCredentialsError(
+            f"{var} is not set but required by {why}. Add it to .env or the environment."
+        )

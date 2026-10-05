@@ -27,6 +27,9 @@ dependencies = [
     "pypdf>=4.0",
 ]
 
+[project.scripts]
+rag = "rag.cli:app"
+
 [project.optional-dependencies]
 openai = ["langchain-openai>=0.2"]
 anthropic = ["langchain-anthropic>=0.2"]

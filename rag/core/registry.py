@@ -66,11 +66,16 @@ class Registry(Generic[T]):
         return f"Registry({self.kind!r}, {self.available()})"
 
 
-def require(module: str, extra: str) -> ModuleType:
-    """Import an optional dependency or explain which extra installs it."""
+def require(module: str, extra: str | None = None) -> ModuleType:
+    """Import an optional dependency or explain how to install it.
+
+    ``extra`` names the pyproject extra that provides ``module``; ``None``
+    means it is a core dependency.
+    """
     try:
         return importlib.import_module(module)
     except ImportError as exc:
+        fix = f"pip install 'ragchatbot[{extra}]'" if extra else "pip install -r requirements.txt"
         raise MissingDependencyError(
-            f"'{module}' is required for this component. Install it with: pip install 'ragchatbot[{extra}]'"
+            f"'{module}' is required for this component. Install it with: {fix}"
         ) from exc
