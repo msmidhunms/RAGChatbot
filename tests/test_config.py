@@ -19,7 +19,7 @@ def write_yaml(tmp_path: Path, data: dict) -> Path:
 def test_defaults_without_file():
     cfg = load_config(env={})
     assert cfg.llm.provider == "google_genai"
-    assert cfg.llm.model == "gemini-1.5-flash"
+    assert cfg.llm.model == "gemini-3.5-flash"
     assert cfg.vector_store.type == "chroma"
     assert cfg.retrieval.strategy == "hybrid"
 

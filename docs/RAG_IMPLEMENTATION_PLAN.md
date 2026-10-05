@@ -99,7 +99,7 @@ Nested Pydantic v2 models, each with `extra="forbid"` so typos fail fast. Use di
 app: { name: ragchatbot, log_level: INFO, data_dir: ./data }
 llm:
   provider: google_genai        # google_genai | openai | anthropic | ollama
-  model: gemini-1.5-flash
+  model: gemini-3.5-flash
   temperature: 0.1
   max_tokens: 1024
   timeout: 60
@@ -107,7 +107,7 @@ llm:
   structured_output: true
 embeddings:
   provider: google              # google | openai | ollama | huggingface
-  model: models/text-embedding-004
+  model: models/gemini-embedding-001
   batch_size: 64
   normalize: true
   cache: { enabled: true, path: ./data/emb_cache }

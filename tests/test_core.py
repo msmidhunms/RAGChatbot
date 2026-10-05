@@ -46,7 +46,7 @@ def test_require_missing_names_extra():
 
 
 def test_require_present():
-    assert require("json", "core").dumps({}) == "{}"
+    assert require("json").dumps({}) == "{}"
 
 
 def test_configure_logging_idempotent():
@@ -56,3 +56,8 @@ def test_configure_logging_idempotent():
     assert sum(h.get_name() == "rag-default" for h in logger.handlers) == 1
     assert get_logger("ingestion").name == "rag.ingestion"
     assert get_logger("rag.stores").name == "rag.stores"
+
+
+def test_require_core_dependency_message():
+    with pytest.raises(MissingDependencyError, match="pip install -r requirements.txt"):
+        require("definitely_not_installed_module_xyz")
