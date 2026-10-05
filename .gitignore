@@ -193,3 +193,5 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+# RAG chatbot local data (vector store, record manager, chat history)
+storage/
