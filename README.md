@@ -76,6 +76,10 @@ are rejected with a precise message. Sample configs:
 Switching the embedding model on an existing collection is detected and refused (mixing vector spaces silently
 breaks retrieval): run `rag store reset` or use a new `vector_store.collection`.
 
+Similarity scores mean the same thing on every store, so `retrieval.score_threshold` is portable:
+`cosine` → cosine similarity (-1..1), `ip` → dot product, `l2` → `1 / (1 + euclidean distance)`.
+PGVector keeps all collections in shared tables, so one Postgres database can only hold one embedding size.
+
 ## CLI
 
 | Command | Purpose |

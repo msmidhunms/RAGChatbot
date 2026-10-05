@@ -13,7 +13,7 @@ from langchain_core.embeddings import Embeddings
 from rag.config.schema import VectorStoreConfig
 from rag.core.exceptions import MissingCredentialsError
 from rag.core.registry import require
-from rag.stores.base import STORES, Hit, VectorStore, similarity_from_distance
+from rag.stores.base import STORES, Hit, VectorStore, from_cosine_distance, from_l2
 from rag.stores.filters import to_pgvector
 
 
@@ -27,7 +27,7 @@ class PGVectorStore(VectorStore):
         conn = os.environ.get(env)
         if not conn:
             raise MissingCredentialsError(f"{env} is not set but required by vector_store.type=pgvector")
-        strategy = {"cosine": "cosine", "l2": "euclidean", "ip": "inner"}[self.cfg.distance]
+        strategy = {"cosine": "cosine", "l2": "l2", "ip": "inner"}[self.cfg.distance]
         self._vs = mod.PGVector(
             embeddings=self.embeddings,
             connection=conn,
@@ -36,24 +36,40 @@ class PGVectorStore(VectorStore):
             distance_strategy=strategy,
         )
 
+    def _row_id(self, chunk_id: str) -> str:
+        # langchain_postgres keys rows by id across *all* collections, so an upsert of
+        # the same chunk into a second collection would move it; namespace the ids.
+        return f"{self.collection}::{chunk_id}"
+
     def _upsert(self, docs: list[Document], ids: list[str], vectors: list[list[float]]) -> None:
         self._vs.add_embeddings(
             texts=[d.page_content for d in docs],
             embeddings=vectors,
-            metadatas=[d.metadata for d in docs],
-            ids=ids,
+            metadatas=[{**d.metadata, "chunk_id": id_} for d, id_ in zip(docs, ids, strict=True)],
+            ids=[self._row_id(i) for i in ids],
         )
 
     def delete(self, ids: Sequence[str]) -> None:
         if ids:
-            self._vs.delete(ids=list(ids))
+            self._vs.delete(ids=[self._row_id(i) for i in ids])
 
     def _query(
         self, vector: list[float], k: int, flt: Mapping[str, Any] | None, with_vectors: bool = False
     ) -> list[Hit]:
         results = self._vs.similarity_search_with_score_by_vector(vector, k=k, filter=to_pgvector(flt))
         # PGVector cannot return stored vectors; MMR re-embeds via the embedding cache
-        return [Hit(doc, similarity_from_distance(self.cfg.distance, dist)) for doc, dist in results]
+        hits = []
+        for doc, dist in results:
+            doc.id = doc.metadata.get("chunk_id", doc.id)
+            hits.append(Hit(doc, self._score(dist)))
+        return hits
+
+    def _score(self, distance: float) -> float:
+        if self.cfg.distance == "l2":
+            return from_l2(distance, squared=False)
+        if self.cfg.distance == "ip":
+            return -float(distance)  # pgvector <#> is the negative inner product
+        return from_cosine_distance(distance)
 
     def count(self) -> int | None:
         return None  # not exposed by langchain_postgres; see docstore counts

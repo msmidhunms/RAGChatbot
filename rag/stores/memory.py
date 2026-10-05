@@ -52,7 +52,7 @@ class MemoryStore(VectorStore):
         mat = np.asarray([v for _, v in items], dtype=float)
         q = np.asarray(vector, dtype=float)
         if self.cfg.distance == "l2":
-            scores = 1.0 / (1.0 + ((mat - q) ** 2).sum(axis=1))
+            scores = 1.0 / (1.0 + np.sqrt(((mat - q) ** 2).sum(axis=1)))
         elif self.cfg.distance == "ip":
             scores = mat @ q
         else:

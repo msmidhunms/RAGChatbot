@@ -11,7 +11,7 @@ from langchain_core.embeddings import Embeddings
 
 from rag.config.schema import VectorStoreConfig
 from rag.core.registry import require
-from rag.stores.base import STORES, Hit, VectorStore, similarity_from_distance
+from rag.stores.base import STORES, Hit, VectorStore, from_cosine_distance, from_l2
 from rag.stores.filters import to_chroma
 
 
@@ -59,8 +59,13 @@ class ChromaStore(VectorStore):
         for i, id_ in enumerate(res["ids"][0]):
             doc = Document(page_content=res["documents"][0][i], metadata=res["metadatas"][0][i] or {}, id=id_)
             vec = list(res["embeddings"][0][i]) if with_vectors else None
-            hits.append(Hit(doc, similarity_from_distance(self.cfg.distance, res["distances"][0][i]), vec))
+            hits.append(Hit(doc, self._score(res["distances"][0][i]), vec))
         return hits
+
+    def _score(self, distance: float) -> float:
+        if self.cfg.distance == "l2":
+            return from_l2(distance, squared=True)  # chroma reports squared L2
+        return from_cosine_distance(distance)  # cosine: 1 - cos; ip: 1 - dot
 
     def count(self) -> int:
         return self._col.count()
