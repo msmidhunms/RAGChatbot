@@ -1,0 +1,4 @@
+{"question": "Which planet is the hottest?", "ground_truth": "Venus is the hottest planet.", "expected_sources": ["sample.md"]}
+{"question": "What does chlorophyll absorb?", "ground_truth": "Mostly blue and red light.", "expected_sources": ["sample.txt"]}
+{"question": "How long does standard shipping take?", "ground_truth": "3 to 5 business days.", "expected_sources": ["sample.json"]}
+{"question": "What pressure is used for espresso?", "ground_truth": "About nine bars.", "expected_sources": ["sample.html"]}

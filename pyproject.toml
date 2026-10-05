@@ -8,15 +8,15 @@ version = "0.1.0"
 description = "Configurable retrieval-augmented generation chatbot built on LangChain and LangGraph"
 requires-python = ">=3.10"
 dependencies = [
-    "langchain>=0.3",
-    "langchain-core>=0.3",
-    "langchain-community>=0.3",
+    "langchain>=1.0",
+    "langchain-core>=1.0",
     "langchain-text-splitters>=0.3",
-    "langgraph>=0.2",
+    "langgraph>=1.0",
     "langgraph-checkpoint-sqlite>=2.0",
     "langsmith>=0.1",
     "langchain-google-genai>=2.0",
-    "langchain-chroma>=0.1",
+    "chromadb>=0.5",
+    "numpy>=1.26",
     "pydantic>=2.7",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
@@ -35,14 +35,13 @@ openai = ["langchain-openai>=0.2"]
 anthropic = ["langchain-anthropic>=0.2"]
 local = ["langchain-ollama>=0.2", "langchain-huggingface>=0.1", "sentence-transformers>=3.0"]
 faiss = ["faiss-cpu>=1.8"]
-qdrant = ["langchain-qdrant>=0.2", "qdrant-client>=1.10"]
+qdrant = ["qdrant-client>=1.10"]
 pgvector = ["langchain-postgres>=0.0.12", "psycopg[binary]>=3.1"]
-docs = ["docx2txt>=0.8", "beautifulsoup4>=4.12", "jq>=1.7", "unstructured[md]>=0.15", "pymupdf>=1.24"]
+docs = ["docx2txt>=0.8", "pymupdf>=1.24"]
 semantic = ["langchain-experimental>=0.3"]
 rerank = ["langchain-cohere>=0.3"]
-eval = ["ragas>=0.2"]
 dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "types-PyYAML"]
-all = ["ragchatbot[openai,anthropic,local,faiss,qdrant,pgvector,docs,semantic,rerank,eval]"]
+all = ["ragchatbot[openai,anthropic,local,faiss,qdrant,pgvector,docs,semantic,rerank]"]
 
 [tool.setuptools.packages.find]
 include = ["rag*"]
