@@ -67,7 +67,7 @@ splitter:
   semantic_breakpoint: percentile # percentile | standard_deviation | interquartile | gradient
 
 vector_store:
-  type: chroma                    # chroma | faiss | qdrant | pgvector
+  type: chroma                    # chroma | faiss | qdrant | pgvector | memory (not persisted)
   collection: ragchatbot
   distance: cosine                # cosine | l2 | ip
   chroma:

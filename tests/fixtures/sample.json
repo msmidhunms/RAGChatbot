@@ -1,0 +1,6 @@
+{
+  "faq": [
+    {"question": "How long does shipping take?", "answer": "Standard shipping takes 3 to 5 business days within the country.", "topic": "shipping"},
+    {"question": "What is the return policy?", "answer": "Unused items can be returned within 30 days for a full refund.", "topic": "returns"}
+  ]
+}

@@ -160,7 +160,7 @@ class PGVectorConfig(StrictModel):
 
 
 class VectorStoreConfig(StrictModel):
-    type: Literal["chroma", "faiss", "qdrant", "pgvector"] = "chroma"
+    type: Literal["chroma", "faiss", "qdrant", "pgvector", "memory"] = "chroma"
     collection: str = Field("ragchatbot", min_length=1)
     distance: Literal["cosine", "l2", "ip"] = "cosine"
     chroma: ChromaConfig = Field(default_factory=ChromaConfig)
