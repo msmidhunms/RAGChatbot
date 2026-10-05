@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "ragchatbot"
 version = "0.1.0"
 description = "Configurable retrieval-augmented generation chatbot built on LangChain and LangGraph"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "langchain>=1.0",

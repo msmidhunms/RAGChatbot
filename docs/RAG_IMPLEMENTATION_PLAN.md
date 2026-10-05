@@ -379,3 +379,188 @@ All commands accept `--config/-c` and repeatable `--set key=value`.
   3. `rag chat --session t1` (ask a follow-up to confirm the question is condensed)
   4. `rag eval -c configs/default.yaml -c configs/advanced.yaml` (compare metrics)
   5. `rag ingest` again (confirm incremental mode skips all files)
+
+---
+
+## Addendum: execution plan for steps 3–10 (after steps 1–2 landed)
+
+### What steps 1–2 changed
+- **Already in place:**
+  - `rag/config` (schema and `load_config`, with `ensure_env` and `missing_env_vars`)
+  - `rag/core` (`Registry`, `require`, exceptions, logging)
+  - `rag/providers` (`build_llm`, `build_embeddings`, `embedding_namespace`)
+  - `rag/cache.py` (`CachedEmbeddings`, `NormalizedEmbeddings`)
+  - `rag/cli.py` (`config show|validate`, `llm`)
+- **Library constraints:** the installed stack is LangChain 1.x. `MultiQueryRetriever`, `EnsembleRetriever`, `ContextualCompressionRetriever` and `ParentDocumentRetriever` now exist only in the legacy `langchain_classic` package. `BM25Retriever`, the `FAISS` store and most loaders exist only in `langchain_community`, which is being retired.
+- **Decision:** build those pieces in-repo on top of `langchain_core` (`Document`, `Embeddings`, prompts, runnables) and maintained libraries: pypdf, docx2txt, bs4, rank_bm25, faiss, langchain-chroma, langchain-qdrant, langchain-postgres, langchain-text-splitters and langgraph. Each piece is small, and our own code gives full control over scores, filters and metadata.
+- **Dropped:** the `ragas` integration (it is heavy; our own metrics cover the plan). The `langchain-community` dependency is removed from `pyproject.toml`.
+
+### Shared types (`rag/core/types.py`)
+- `RetrievedChunk(document, score, rank, source)`, where `source` names the retriever that produced the chunk (e.g. "dense", "bm25", "rrf").
+- `IngestReport(files_seen, files_ingested, files_skipped, chunks, errors, seconds)`.
+
+### Step 3: ingestion (`rag/ingestion/`)
+- **`loaders.py`**: `LOADERS: Registry[(path_or_url, IngestionConfig) -> list[Document]]`. Each source is resolved to a loader by extension, with `ingestion.loaders` overrides taking priority.
+  - `pypdf`: one Document per page, `metadata.page` 1-based
+  - `pymupdf`: optional, extra `docs`
+  - `text`: txt/md/rst/log; utf-8, with a latin-1 fallback
+  - `docx`: docx2txt, extra `docs`
+  - `bs4`: html/htm; strips script and style tags and keeps the `<title>`
+  - `url`: `urllib` fetch plus bs4; follows same-host links up to `max_depth` when `recursive` is set
+  - `csv`: stdlib csv, one Document per row, honouring `content_columns` and `metadata_columns`
+  - `json` / `jsonl`: stdlib; `jq_schema` supports a simple dotted path with `[]` (e.g. `.items[]`) plus `content_key`, so the `jq` library is not needed
+  - `discover_sources(sources, glob, exclude)` expands directories and passes URLs through unchanged.
+- **`cleaners.py`**:
+  - `normalize_whitespace` (NFKC, collapse runs of spaces and blank lines)
+  - `strip_headers_footers`: removes lines repeated on 50% or more of a file's pages
+  - `min_chars` filter
+  - `build_cleaners(cfg) -> list[Callable]`
+- **`splitters.py`**: `SPLITTERS` registry over `langchain_text_splitters`:
+  - recursive: `RecursiveCharacterTextSplitter`
+  - token: `TokenTextSplitter`, using `encoding_name`
+  - markdown_header: `MarkdownHeaderTextSplitter`, then recursive splitting; the header path goes into `metadata.section`
+  - html_header: `HTMLHeaderTextSplitter`, then recursive splitting
+  - semantic: `langchain_experimental.SemanticChunker`, extra `semantic`, needs embeddings
+  - The resulting interface is `split(docs) -> list[Document]`.
+- **`metadata.py`**:
+  - `doc_id = sha256(source)[:16]`
+  - `chunk_id = sha256(doc_id|index|content)[:32]`
+  - `content_hash` (of the whole file), plus `source`, `page`, `section`, `chunk_index`, `ingested_at`, `splitter`, `embedding_model`, and user tags
+- **`manifest.py`**: JSON file at `data_dir/manifest.json`, `{source: {content_hash, doc_id, chunk_ids, ingested_at}}`.
+- **`pipeline.py`**: `IngestionPipeline(cfg, store, docstore).run(sources=None, tags=None, reset=False) -> IngestReport`. For each file:
+  1. Compute its hash; skip it if unchanged and incremental mode is on.
+  2. Load, clean, split and enrich it.
+  3. Dedupe chunks by chunk content hash.
+  4. Delete the old chunks for this doc from the store and docstore.
+  5. `store.add(chunks)` in batches, then `docstore.put`, then update the manifest.
+  - A file that fails is recorded in `errors`; the run continues.
+  - Sources removed from disk are not deleted automatically; `rag store delete` handles that.
+
+### Step 4: vector stores (`rag/stores/`)
+- **`base.py`**: `VectorStore` ABC with:
+  - `add(chunks: list[Document])` (ids taken from `metadata.chunk_id`)
+  - `delete(ids)`
+  - `search(query_vec_or_text, k, filter) -> list[(Document, score)]`, where higher scores are always better (normalised per backend)
+  - `mmr_search(query, k, fetch_k, lambda_mult, filter)` (MMR implemented once in base over fetched candidates plus their vectors)
+  - `count()`, `reset()`, `get_meta()/set_meta()`
+- **Embedding guard:** `set_meta()` stores `embedding_namespace` and the vector dimension. `check_compatible(namespace)` raises `ConfigError` on a mismatch ("collection built with google:X, config uses openai:Y; run `rag store reset` or change collection").
+- **`STORES` registry**, built with `(cfg, embeddings)`:
+  - `chroma.py`: `langchain_chroma.Chroma` (persist_dir, `collection_metadata={"hnsw:space": distance}`)
+  - `faiss.py`: own adapter. `faiss.IndexIDMap2(IndexFlatIP|IndexFlatL2)`, int64 ids mapped to chunk ids; documents kept in a JSON sidecar; `remove_ids` handles deletes; `save()` after each write. Extra `faiss`.
+  - `qdrant.py`: `langchain_qdrant.QdrantVectorStore` with `qdrant_client.QdrantClient(url|path)`; the collection is created with the embedding dimension. Extra `qdrant`.
+  - `pgvector.py`: `langchain_postgres.PGVector(connection=env[connection_env], use_jsonb=True)`. Extra `pgvector`.
+- **`filters.py`**: a store-agnostic filter dict `{field: value | {"$eq","$ne","$in","$gt","$gte","$lt","$lte": v}}` is translated per backend:
+  - Chroma: native `$and` syntax
+  - Qdrant: `models.Filter`
+  - PGVector: native jsonb operators
+  - FAISS and the docstore: a Python predicate (`matches(metadata, filter)`)
+- **`docstore.py`**: `SQLiteDocStore` (`data_dir/docstore.sqlite`) holds chunk_id → (content, metadata JSON, doc_id), plus parents for parent retrieval. It supports `put`, `get_many`, `delete_doc`, `all_chunks(filter)` and `count`. It is the BM25 corpus and the source of truth for `rag store stats`.
+
+### Step 5: retrieval (`rag/retrieval/`)
+- **`base.py`**: the `Retriever` protocol is `retrieve(query: str, k: int, filter: dict|None) -> list[RetrievedChunk]`.
+- **`dense.py`**: similarity, mmr, or threshold (drop results below `score_threshold`).
+- **`sparse.py`**: `rank_bm25.BM25Okapi` over the docstore chunks, using simple lowercase word tokenisation. The index is rebuilt lazily when the docstore's change counter moves. Filters are applied via `matches`.
+- **`hybrid.py`**: `fuse(lists, weights, method, rrf_k)`.
+  - `rrf`: score = Σ wᵢ / (rrf_k + rankᵢ)
+  - `weighted`: min-max normalise each list's scores, then take the weighted sum
+  - Results are deduplicated by chunk_id.
+- **`parent.py`**: ingestion stores child chunks (child_chunk_size) in the vector store and parent chunks (parent_chunk_size) in the docstore, linked by `metadata.parent_id`. Retrieval searches children, then returns unique parents ranked by their best child.
+- **`query_transform.py`**: `QUERY_TRANSFORMS` registry, `(llm, cfg) -> (question, history) -> list[str]`:
+  - `none`: [q]
+  - `rewrite`: [rewritten]
+  - `multi_query`: [q, *n variants] (structured `list[str]` output)
+  - `hyde`: [hypothetical answer]; it is embedded and searched like any other query
+  - `step_back`: [q, broader question]
+  - Results from multiple queries are fused with RRF.
+- **`rerankers.py`**: `RERANKERS` registry:
+  - `none`: truncate to top_n
+  - `cross_encoder`: `sentence_transformers.CrossEncoder`, extra `local`
+  - `cohere`: `langchain_cohere.CohereRerank`, extra `rerank`
+  - `llm`: structured relevance scores 0–10 for every chunk in one call
+- **`compression.py`**: `COMPRESSORS` registry:
+  - `embeddings_filter`: drop chunks whose cosine similarity to the query is below the threshold
+  - `redundant_filter`: drop near-duplicate chunks (pairwise cosine above the threshold)
+  - `llm_extract`: the LLM keeps only the relevant sentences; chunks that end up empty are dropped
+- **`factory.py`**: `build_retriever(cfg, store, docstore, embeddings, llm) -> RetrievalPipeline`, where `RetrievalPipeline.run(question, history, filter) -> list[RetrievedChunk]` runs transform → per-query base retrieval → fuse → compress → rerank. The pipeline's stages are also exposed individually for the graph nodes.
+
+### Step 6: generation (`rag/generation/`)
+- **`prompts.py`**: `PROMPTS` registry of `ChatPromptTemplate`s:
+  - answer templates: default, concise, detailed, strict_citations
+  - helper prompts: condense, rewrite, multi_query, hyde, step_back, grade, self_check, extract, rerank, summary
+  - `load_prompt(name_or_path)` also accepts a .txt file containing `{context}` and `{question}`.
+- **`schemas.py`**: `Citation(id:int, source, page|None, quote)`, `RAGAnswer(title, answer, citations, confidence)`, plus `GradeResult` and `GroundednessResult`.
+- **`context.py`**: `format_context(chunks, style, max_tokens)` numbers chunks [1..n] with source and page headers and drops the lowest-ranked chunks to fit the tiktoken (cl100k) budget. It returns `(text, used_chunks)`.
+- **`generator.py`**: `Generator(llm, cfg).generate(question, chunks, history) -> RAGAnswer`. Behaviour:
+  - Structured output when enabled. Otherwise a plain-text answer is wrapped in `RAGAnswer` with citations parsed from `[n]` markers.
+  - `stream(...)` yields text tokens.
+  - No chunks and `answer_when_no_context=refuse` gives a fixed `NO_ANSWER` reply without calling the LLM. With `general_knowledge`, the LLM answers with a "not from documents" note.
+  - Citation ids are validated against the chunks actually used, and source and page are filled in from chunk metadata.
+
+### Step 7: memory, graph and pipeline facade
+- **`memory/history.py`**: `select_history(messages, cfg, llm)`:
+  - none: []
+  - buffer: all messages
+  - window: the last `window_size` turns, via `trim_messages`
+  - summary: a running summary in state, updated when history exceeds the window
+  
+  `build_checkpointer(cfg)` returns a `MemorySaver`, or `SqliteSaver` (from `langgraph-checkpoint-sqlite`, core dependency) on a `sqlite3` connection.
+- **`graph/state.py`**: `RAGState` TypedDict with `messages` (`add_messages`), `question`, `standalone_question`, `queries`, `chunks`, `answer`, `summary`, `retries`, `timings` and `filter`.
+- **`graph/nodes.py`**: node factories that close over the components:
+  - `condense` (only with history and `condense_with_history`)
+  - `transform`, `retrieve`, `postprocess` (compress and rerank)
+  - `grade` (structured yes/no per chunk; drops irrelevant chunks; if none survive and retries remain, a rewrite loop goes back to `transform`)
+  - `generate`
+  - `self_check` (not grounded and retries remain → back to `generate` with feedback)
+  - `finalize` (appends the AI message and updates the summary)
+  
+  Every node records its latency in `timings`.
+- **`graph/builder.py`**: `build_graph(components, cfg, checkpointer)` wires in only the enabled nodes, using conditional edges.
+- **`rag/pipeline.py`**: `RAGPipeline.from_config(cfg)` lazily builds the embeddings, store, docstore, LLM, retriever, generator and graph. Its methods:
+  - `ingest(sources, tags, reset)`
+  - `retrieve(q, filter)`
+  - `query(q, filter) -> QueryResult(answer, chunks, timings)`, run without memory under a fresh thread id
+  - `chat(q, session_id, filter)`
+  - `stream_chat(...)`
+  - `stats()`, `reset_store()`, `delete_source(src)`
+  
+  The components can also be injected directly (`RAGPipeline(cfg, llm=..., embeddings=...)`) so tests can use fake models.
+
+### Step 8: CLI (`rag/cli.py`, extend)
+- **Commands:**
+  - `ingest [PATHS]... --tag k=v --reset --no-incremental`: Rich table of the `IngestReport`
+  - `query Q --filter k=v --show-sources --json`
+  - `retrieve Q --filter --k`: table of rank, score, retriever, source, page and snippet
+  - `chat --session ID`: REPL with streaming answers; supports `/sources`, `/reset`, `/config`, `/exit`
+  - `store stats|reset|delete --source X`
+  - `eval -c A -c B`
+  - existing: `config show|validate` and `llm`
+- **Shared behaviour:** `--verbose` prints per-node timings. Errors are reported as `RAGError` (exit code 1) or as a config error (exit code 2).
+
+### Step 9: evaluation and observability
+- **`evaluation/dataset.py`**: JSONL loader with a `QAItem` model.
+- **`evaluation/metrics.py`**:
+  - retrieval: `hit_rate@k`, `mrr`, `recall@k` (expected source matched as a path suffix against `metadata.source`)
+  - LLM judge: `faithfulness`, `answer_relevance` and `correctness` via structured 0–1 scores, using `judge_llm` or falling back to `llm`
+- **`evaluation/runner.py`**: `run_eval(configs, dataset) -> list[EvalReport]`. Each config gets a pipeline; the run ingests the dataset's corpus when `--ingest DIR` is given, then writes JSON to `output_dir/<ts>.json`. The CLI prints a comparison table.
+- **`observability/tracing.py`**: `setup_tracing(cfg)` sets the `LANGSMITH_TRACING` and `LANGSMITH_PROJECT` env vars. Per-node timings are logged at INFO when `log_timings` is on, and a `TokenUsageCallback` sums `usage_metadata`.
+
+### Step 10: docs and fixtures
+- **`README.md`**: install, quickstart, config reference (pointing to `configs/default.yaml`), how to add a backend via the registry, and the CLI reference.
+- **Fixtures:** `tests/fixtures/` gets `sample.md`, `sample.txt`, `sample.csv`, `sample.json`, `sample.html` and `qa.jsonl`, plus a `sample.pdf` generated by a test helper using pypdf (so no binary is committed).
+- **Packaging:** `pyproject.toml` gets the README and the updated dependency set (core gains langgraph-checkpoint-sqlite, chromadb via langchain-chroma, rank-bm25 and pypdf; `langchain-community` is removed).
+
+### Testing approach (all offline)
+- `tests/conftest.py` provides:
+  - `DeterministicFakeEmbedding`, and a keyword-hash embedding so that similar texts actually rank higher
+  - `FakeChatModel`: scripted responses that also support `with_structured_output` by returning pre-set Pydantic objects in sequence
+  - a `tmp_cfg` fixture that points `data_dir`, the store paths and memory at `tmp_path`
+- **New test files**:
+  - `test_loaders.py`, `test_cleaners_splitters.py`, `test_ingestion.py` (incremental skip, re-ingest on change, error isolation)
+  - `test_stores.py`, parametrised over Chroma, FAISS and Qdrant local (each skipped if its library is missing; PGVector only with `PG_CONN`), covering add, search, filter, delete and the embedding guard
+  - `test_retrieval.py` (BM25, RRF ordering, weighted fusion, parent retrieval, transforms, rerank and compression with fakes)
+  - `test_generation.py`, `test_graph.py` (grade-and-rewrite loop, self-check loop, memory condensing across turns with sqlite)
+  - `test_pipeline_cli.py` (ingest, query, retrieve and store commands end to end with fakes)
+  - `test_eval.py`
+- **Install for development:** `chromadb`/`langchain-chroma`, `faiss-cpu`, `qdrant-client`/`langchain-qdrant`, `pypdf`, `docx2txt`, `beautifulsoup4`, `rank-bm25`, `langgraph-checkpoint-sqlite`.
+- **Checks:** `ruff check`, `ruff format`, `mypy rag` and `pytest` before each commit. There is one commit per step, each pushed to `claude/configurable-rag-plan-voik2a`.
+- **Live checks:** model calls against real providers cannot run here (no API keys). The final report says so and gives the user the manual smoke-test commands.
