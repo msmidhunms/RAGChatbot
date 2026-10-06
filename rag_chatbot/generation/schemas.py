@@ -80,3 +80,27 @@ class JudgeScores(BaseModel):
     context_recall: float = Field(
         1.0, ge=0, le=1, description="Share of the reference answer's facts present in the context"
     )
+
+
+class GeneratedQA(BaseModel):
+    """A question answerable from the excerpt(s), with a verbatim supporting quote."""
+
+    question: str = Field(description="A specific question a user might ask")
+    answer: str = Field(description="The correct, concise answer")
+    evidence: list[str] = Field(
+        description="Short verbatim quotes (3-12 words each) copied exactly from the excerpts "
+        "that prove the answer"
+    )
+
+
+class GeneratedQuestion(BaseModel):
+    """A single generated question."""
+
+    question: str = Field(description="The question")
+
+
+class GeneratedFollowUp(BaseModel):
+    """A two-turn conversation whose second turn only makes sense after the first."""
+
+    first_question: str = Field(description="An opening question that introduces the subject")
+    follow_up: str = Field(description="The original question rewritten as a follow-up using a pronoun")

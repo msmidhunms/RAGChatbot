@@ -150,3 +150,30 @@ JUDGE = _p(
     "(1.0 if no reference is given)",
     "Question: {question}\n\nContext:\n{context}\n\nReference answer: {reference}\n\nAnswer:\n{answer}",
 )
+
+GENERATE_QA = _p(
+    "You write evaluation questions for a document question-answering system. Using only the excerpt, "
+    "write one specific question that the excerpt answers, the answer, and 1-2 short quotes copied "
+    "verbatim from the excerpt that prove the answer. Do not ask about formatting or the document itself.",
+    "Excerpt:\n{context}",
+)
+
+GENERATE_MULTIHOP = _p(
+    "You write evaluation questions that need two documents. Write one question that can only be "
+    "answered by combining a fact from excerpt A with a fact from excerpt B, the answer, and two "
+    "short verbatim quotes: the first copied from A, the second from B.",
+    "Excerpt A:\n{context_a}\n\nExcerpt B:\n{context_b}",
+)
+
+GENERATE_UNANSWERABLE = _p(
+    "You write evaluation questions that a document collection cannot answer. The excerpts show what "
+    "the collection is about. Write one plausible, specific question on the same subject whose answer "
+    "is NOT contained in any excerpt (for example a number, name or policy that is never mentioned).",
+    "Excerpts:\n{context}",
+)
+
+GENERATE_FOLLOWUP = _p(
+    "Turn the question into a two-turn conversation: an opening question that introduces the subject, "
+    "then a follow-up that refers back to it with a pronoun (it, its, they, that) instead of naming it.",
+    "Question: {question}",
+)
