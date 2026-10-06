@@ -170,7 +170,11 @@ class IngestionPipeline:
 
     # ---------------------------------------------------------- maintenance
     def _remove(self, source: str, doc_id: str) -> int:
-        entry = self.manifest.get(source)
+        # Forget the source before touching the index: if anything below or the
+        # following re-add fails, the next incremental run re-ingests it instead
+        # of skipping a source whose chunks are gone.
+        entry = self.manifest.remove(source)
+        self.manifest.save()
         ids = set(entry.get("chunk_ids", [])) if entry else set()
         ids.update(self.docstore.delete_doc(doc_id))
         if ids:
@@ -181,8 +185,6 @@ class IngestionPipeline:
         """Remove a source from the store, docstore and manifest; returns deleted chunk count."""
         source = normalize_source(source)
         deleted = self._remove(source, doc_id_for(source))
-        self.manifest.remove(source)
-        self.manifest.save()
         return deleted
 
     def reset(self) -> None:

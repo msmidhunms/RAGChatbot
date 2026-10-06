@@ -111,10 +111,9 @@ def test_ingest_query_retrieve_store(e2e, corpus):
     stats = e2e("store", "stats")
     assert "sample.md" in stats.output and "faiss" in stats.output
 
-    md = next(line.split()[1] for line in stats.output.splitlines() if "sample.md" in line)
-    deleted = e2e("store", "delete", "--source", md)
+    deleted = e2e("store", "delete", "--source", "sample.md")  # unique suffix of the full path
     assert deleted.exit_code == 0 and "deleted" in deleted.output
-    assert e2e("store", "delete", "--source", md).exit_code == 1
+    assert e2e("store", "delete", "--source", "sample.md").exit_code == 1
 
     assert e2e("store", "reset", "--yes").exit_code == 0
     assert "no results" in e2e("retrieve", "espresso").output

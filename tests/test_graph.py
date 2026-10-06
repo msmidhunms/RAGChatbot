@@ -209,3 +209,20 @@ def test_stats_and_store_ops(make_pipeline, corpus):
     assert pipe.stats()["sources"] == 4
     pipe.reset_store()
     assert pipe.stats()["chunks"] == 0
+
+
+def test_resolve_source_by_suffix(make_pipeline, corpus, tmp_path):
+    from rag_chatbot.core.exceptions import RAGError
+
+    pipe = make_pipeline()
+    full = next(s for s in pipe.docstore.sources() if s.endswith("sample.md"))
+    assert pipe.resolve_source("sample.md") == full
+    assert pipe.resolve_source("corpus/sample.md") == full
+    assert pipe.resolve_source(full) == full
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "sample.md").write_text((corpus / "sample.md").read_text())
+    pipe.ingest([str(other)])
+    with pytest.raises(RAGError, match="matches several sources"):
+        pipe.resolve_source("sample.md")
+    assert pipe.delete_source("other/sample.md") > 0

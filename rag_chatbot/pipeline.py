@@ -21,6 +21,7 @@ from langchain_core.messages import AIMessageChunk, BaseMessage, HumanMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from rag_chatbot.config import RAGConfig, load_config
+from rag_chatbot.core.exceptions import RAGError
 from rag_chatbot.core.logging import configure_logging
 from rag_chatbot.core.types import IngestReport, RetrievedChunk
 from rag_chatbot.generation.generator import ANSWER_TAG, Generator
@@ -29,6 +30,7 @@ from rag_chatbot.graph.builder import build_graph
 from rag_chatbot.graph.nodes import Components
 from rag_chatbot.graph.state import load_chunks
 from rag_chatbot.ingestion.manifest import Manifest
+from rag_chatbot.ingestion.metadata import normalize_source
 from rag_chatbot.ingestion.pipeline import IngestionPipeline
 from rag_chatbot.memory.history import build_checkpointer
 from rag_chatbot.observability.tracing import TokenUsageCallback, log_timings, setup_tracing
@@ -175,8 +177,21 @@ class RAGPipeline:
     ) -> IngestReport:
         return self.ingestion.run(sources, tags=tags, reset=reset, incremental=incremental)
 
+    def resolve_source(self, source: str) -> str:
+        """Match ``source`` against indexed sources: exact path/URL, else a unique suffix
+        (``sample.md`` or ``docs/sample.md``). Raises if the suffix is ambiguous."""
+        indexed = set(self.docstore.sources()) | set(self.manifest.entries)
+        exact = normalize_source(source)
+        if exact in indexed or source in indexed:
+            return exact if exact in indexed else source
+        suffix = "/" + source.replace("\\", "/").lstrip("./")
+        matches = sorted(s for s in indexed if s.endswith(suffix))
+        if len(matches) > 1:
+            raise RAGError(f"'{source}' matches several sources: {', '.join(matches)}")
+        return matches[0] if matches else exact
+
     def delete_source(self, source: str) -> int:
-        return self.ingestion.delete_source(source)
+        return self.ingestion.delete_source(self.resolve_source(source))
 
     def reset_store(self) -> None:
         self.ingestion.reset()

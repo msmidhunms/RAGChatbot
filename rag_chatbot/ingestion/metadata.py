@@ -19,14 +19,14 @@ def sha256(data: str | bytes) -> str:
 
 
 def normalize_source(source: str) -> str:
-    """Canonical source string: URLs as-is, paths relative to cwd when possible."""
+    """Canonical source string: URLs as-is, files as absolute resolved paths.
+
+    The source string is the document's identity (doc_id, manifest key), so it
+    must not depend on the directory ``rag ingest`` was run from.
+    """
     if is_url(source):
         return source
-    path = Path(source).expanduser().resolve()
-    try:
-        return path.relative_to(Path.cwd()).as_posix()
-    except ValueError:
-        return path.as_posix()
+    return Path(source).expanduser().resolve().as_posix()
 
 
 def doc_id_for(source: str) -> str:

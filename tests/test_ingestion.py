@@ -163,7 +163,7 @@ def test_semantic_splitter_requires_embeddings():
 def test_normalize_source(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "d").mkdir()
-    assert normalize_source("./d/../d/a.md") == "d/a.md"
+    assert normalize_source("./d/../d/a.md") == (tmp_path / "d" / "a.md").as_posix()
     assert normalize_source("https://x.org/a") == "https://x.org/a"
     assert normalize_source("/elsewhere/a.md").startswith("/")
 
@@ -201,9 +201,9 @@ def test_pipeline_ingests_corpus(pipeline_factory, corpus, monkeypatch):
     assert report.files_seen == report.files_ingested == 5
     assert report.chunks_added == pipe.store.count() == pipe.docstore.count()
     sources = pipe.docstore.sources()
-    assert "corpus/sample.md" in sources
+    assert any(s.endswith("/corpus/sample.md") and s.startswith("/") for s in sources)
     hit = pipe.store.search("hottest planet Venus", k=1)[0]
-    assert hit.document.metadata["source"] == "corpus/sample.md"
+    assert hit.document.metadata["source"].endswith("/corpus/sample.md")
     assert hit.document.metadata["embedding_model"] == "kw"
 
 
@@ -277,3 +277,36 @@ def test_manifest_roundtrip(tmp_path):
     memory_only = Manifest(None)
     memory_only.set("a", content_hash="h")
     memory_only.save()  # no-op
+
+
+def test_failed_reingest_is_retried(pipeline_factory, corpus):
+    """A store failure after old chunks were removed must not leave the source marked current."""
+    pipe = pipeline_factory()
+    target = str(corpus / "sample.txt")
+    pipe.run([target])
+    real_add = pipe.store.add
+    calls = {"n": 0}
+
+    def flaky_add(docs):
+        calls["n"] += 1
+        raise RuntimeError("quota exceeded")
+
+    pipe.store.add = flaky_add
+    failed = pipe.run([target], incremental=False)  # same content, forced re-ingest
+    assert failed.errors and calls["n"] == 1
+    pipe.store.add = real_add
+    retried = pipe.run([target])  # incremental: must not skip the now-missing source
+    assert retried.files_ingested == 1 and retried.files_skipped == 0
+    assert pipe.store.count() == pipe.docstore.count() > 0
+
+
+def test_same_file_from_different_cwd_is_one_source(pipeline_factory, corpus, monkeypatch):
+    pipe = pipeline_factory()
+    monkeypatch.chdir(corpus.parent)
+    pipe.run(["corpus/sample.txt"])
+    first = pipe.store.count()
+    monkeypatch.chdir(corpus)
+    again = pipe.run(["sample.txt"])
+    assert again.files_skipped == 1
+    assert pipe.store.count() == first
+    assert list(pipe.docstore.sources()) == [str((corpus / "sample.txt").resolve().as_posix())]

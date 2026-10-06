@@ -351,7 +351,9 @@ def store_stats(config: ConfigOpt = None, set_: SetOpt = None) -> None:
         table.add_row(key, str(stats[key]))
     console.print(table)
     if stats["per_source"]:
-        per = Table("source", "chunks", title="Sources")
+        per = Table(title="Sources")
+        per.add_column("source", overflow="fold")
+        per.add_column("chunks", justify="right")
         for source, n in sorted(stats["per_source"].items()):
             per.add_row(source, str(n))
         console.print(per)
@@ -376,7 +378,11 @@ def store_reset(
 @store_app.command("delete")
 def store_delete(
     source: Annotated[
-        str, typer.Option("--source", help="Source path or URL as shown by `rag store stats`.")
+        str,
+        typer.Option(
+            "--source",
+            help="Source path or URL from `rag store stats`, or a unique suffix such as `docs/a.pdf`.",
+        ),
     ],
     config: ConfigOpt = None,
     set_: SetOpt = None,

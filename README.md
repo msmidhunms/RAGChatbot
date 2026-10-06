@@ -89,7 +89,7 @@ PGVector keeps all collections in shared tables, so one Postgres database can on
 | `rag query "Q" [-f key=value] [--show-sources] [--json] [-v]` | one-shot answer with citations, timings and token usage |
 | `rag retrieve "Q" [-f key=value] [--json]` | inspect retrieval only (ranks, scores, retriever) |
 | `rag chat [--session ID] [--no-stream]` | conversation with memory; `/sources /history /reset /config /exit` |
-| `rag store stats \| reset \| delete --source S` | inspect or maintain the index |
+| `rag store stats \| reset \| delete --source S` | inspect or maintain the index (`S` may be a unique path suffix) |
 | `rag eval -c a.yaml -c b.yaml [--dataset qa.jsonl] [--ingest DIR]` | compare configurations on a QA set |
 | `rag config show \| validate` | print merged config / check it and the credentials |
 
