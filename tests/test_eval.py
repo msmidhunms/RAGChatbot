@@ -4,8 +4,10 @@ import math
 import pytest
 from langchain_core.documents import Document
 
+from rag_chatbot.core.exceptions import ConfigError
 from rag_chatbot.core.types import RetrievedChunk
 from rag_chatbot.evaluation.dataset import QAItem, load_dataset
+from rag_chatbot.evaluation.gates import check_gates, parse_gate, parse_gates
 from rag_chatbot.evaluation.metrics import (
     METRICS,
     answer_scores,
@@ -21,7 +23,8 @@ from rag_chatbot.evaluation.metrics import (
     token_f1,
     usage_totals,
 )
-from rag_chatbot.evaluation.runner import Evaluator, resolve_metrics, run_eval, save_reports
+from rag_chatbot.evaluation.report import load_reports, render_markdown, worst_items, write_reports
+from rag_chatbot.evaluation.runner import EvalReport, Evaluator, resolve_metrics, run_eval
 from rag_chatbot.generation.generator import NO_ANSWER
 from rag_chatbot.generation.schemas import Citation, GradeResult, JudgeScores, LLMAnswer, RAGAnswer
 from rag_chatbot.pipeline import RAGPipeline
@@ -238,5 +241,77 @@ def test_run_eval_compares_configs_and_saves(pipeline, tmp_path):
     )
     assert [r.name for r in reports] == ["a", "b"]
     assert reports[0].config["retrieval"]["strategy"] == "dense"
-    saved = json.loads(save_reports(reports, tmp_path / "out").read_text())
+    json_path, md_path = write_reports(reports, tmp_path / "out")
+    saved = json.loads(json_path.read_text())["reports"]
     assert [r["name"] for r in saved] == ["a", "b"] and "hit_rate" in saved[0]["metrics"]
+    assert "| hit_rate | " in md_path.read_text()
+
+
+# ------------------------------------------------------------------ gates
+def _report(name="cfg", **metrics):
+    return EvalReport(
+        name=name,
+        items=3,
+        metrics=metrics,
+        by_category={"unanswerable": {"refusal_accuracy": 0.5}},
+        latency={"latency_p95": 2.5},
+        usage={"total_tokens": 900},
+        selected_metrics=list(metrics),
+    )
+
+
+def test_parse_gate():
+    assert str(parse_gate("hit_rate >= 0.8")) == "hit_rate>=0.8"
+    assert parse_gate("mrr=0.5").op == ">="  # bare '=' means at least
+    assert parse_gate("unanswerable.refusal_accuracy>0.9").target == "unanswerable.refusal_accuracy"
+    assert len(parse_gates(["a>=1", "a >= 1", "b<=2"])) == 2
+    for bad in ("hit_rate", "hit_rate>=x", ">=0.5", "hit rate>=1"):
+        with pytest.raises(ConfigError, match="invalid gate"):
+            parse_gate(bad)
+
+
+def test_check_gates():
+    results = check_gates(
+        [_report(hit_rate=0.9)],
+        parse_gates(
+            [
+                "hit_rate>=0.8",
+                "latency_p95<=2",
+                "unanswerable.refusal_accuracy>=0.9",
+                "mrr>=0.1",
+                "total_tokens<1000",
+            ]
+        ),
+    )
+    assert [r.passed for r in results] == [True, False, False, False, True]
+    assert "not measured" in results[3].message and "actual 2.5" in results[1].message
+
+
+# ---------------------------------------------------------------- reports
+def test_markdown_report_and_worst_items(tmp_path):
+    report = _report(hit_rate=0.5, token_f1=0.4)
+    report.details = [
+        {"id": "good", "category": "factual", "question": "q1", "scores": {"hit_rate": 1.0, "token_f1": 1.0}},
+        {
+            "id": "bad",
+            "category": "factual",
+            "question": "q2",
+            "ground_truth": "x",
+            "answer": "y",
+            "sources": ["/a/b/doc.md"],
+            "scores": {"hit_rate": 0.0, "token_f1": 0.0},
+        },
+        {"id": "boom", "category": "factual", "question": "q3", "error": "RuntimeError: x", "scores": {}},
+    ]
+    assert [d["id"] for d in worst_items(report)] == ["boom", "bad"]
+    gates = check_gates([report], parse_gates(["hit_rate>=0.8"]))
+    md = render_markdown([report], gates)
+    assert "| hit_rate | 0.500 |" in md and "1 failed" in md and "### bad (factual)" in md
+    assert "retrieved: doc.md" in md and "### good" not in md
+    json_path, md_path = write_reports([report], tmp_path, gates)
+    loaded, loaded_gates = load_reports(json_path)
+    assert loaded[0].metrics == report.metrics and loaded_gates[0].passed is False
+    with pytest.raises(ConfigError, match="not an evaluation report"):
+        bad = tmp_path / "bad.json"
+        bad.write_text("{}")
+        load_reports(bad)

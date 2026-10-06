@@ -243,15 +243,3 @@ def run_eval(
         name = Path(path).stem if path else "defaults"
         reports.append(Evaluator(pipeline, selected).run(items, name=name))
     return reports
-
-
-def save_reports(reports: Sequence[EvalReport], out_dir: str | Path) -> Path:
-    """Write all reports to ``eval-<timestamp>.json``."""
-    import json
-    from datetime import datetime
-
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    path = out / f"eval-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
-    path.write_text(json.dumps([r.to_dict() for r in reports], indent=2, default=str), encoding="utf-8")
-    return path

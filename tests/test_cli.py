@@ -175,7 +175,13 @@ def test_eval_command(e2e, monkeypatch, keyword_embeddings, fake_llm, tmp_path, 
     )
     assert result.exit_code == 0, result.output
     assert "hit_rate" in result.output and "faithfulness" in result.output
-    assert list((tmp_path / "eval").glob("eval-*.json"))
+    assert list((tmp_path / "eval").glob("eval-*.json")) and list((tmp_path / "eval").glob("eval-*.md"))
+    failing = e2e(
+        "eval", "--dataset", str(FIXTURES / "qa.jsonl"), "--ingest", str(corpus),
+        "--set", f"evaluation.output_dir={tmp_path / 'eval'}", "--set", "evaluation.metrics=[hit_rate]",
+        "--fail-under", "hit_rate>=1.5",
+    )  # fmt: skip
+    assert failing.exit_code == 3 and "FAIL" in failing.output
 
 
 # --------------------------------------------------------------- error handling

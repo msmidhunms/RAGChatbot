@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any
@@ -421,26 +421,45 @@ def eval_command(
     ingest_dir: Annotated[
         list[str] | None, typer.Option("--ingest", help="Ingest these sources before evaluating.")
     ] = None,
+    fail_under: Annotated[
+        list[str] | None,
+        typer.Option("--fail-under", help="Quality gate such as hit_rate>=0.8; exit code 3 if it fails."),
+    ] = None,
     set_: SetOpt = None,
 ) -> None:
     """Score retrieval and answers on a QA dataset; compare several configs side by side."""
     from rag_chatbot.evaluation.dataset import load_dataset
-    from rag_chatbot.evaluation.runner import run_eval, save_reports
+    from rag_chatbot.evaluation.gates import check_gates, parse_gates
+    from rag_chatbot.evaluation.report import write_reports
+    from rag_chatbot.evaluation.runner import run_eval
 
     paths: list[Path | None] = list(configs) if configs else [None]
     first = _load(paths[0], set_)
     with _errors():
+        gates = parse_gates([*first.evaluation.gates, *(fail_under or [])])
         items = load_dataset(dataset or first.evaluation.dataset)
         reports = run_eval(paths, items, overrides=set_ or [], ingest=ingest_dir)
-        out = save_reports(reports, first.evaluation.output_dir)
+        gate_results = check_gates(reports, gates)
+        json_path, md_path = write_reports(reports, first.evaluation.output_dir, gate_results)
     metrics = [m for m in reports[0].selected_metrics if any(m in r.metrics for r in reports)]
     table = Table("metric", *[r.name for r in reports], title=f"Evaluation ({len(items)} questions)")
     for m in metrics:
         table.add_row(m, *[f"{r.metrics[m]:.3f}" if m in r.metrics else "-" for r in reports])
+    table.add_row("latency p95 (s)", *[str(r.latency.get("latency_p95", "-")) for r in reports])
     table.add_row("errors", *[str(r.errors) for r in reports])
-    table.add_row("seconds", *[str(r.seconds) for r in reports])
     console.print(table)
-    console.print(f"[dim]details: {out}[/dim]")
+    console.print(f"[dim]report: {md_path}\ndetails: {json_path}[/dim]")
+    _print_gates(gate_results)
+
+
+def _print_gates(results: Sequence[Any]) -> None:
+    if not results:
+        return
+    for g in results:
+        colour = "green" if g.passed else "red"
+        console.print(f"[{colour}]{'pass' if g.passed else 'FAIL'}[/{colour}] {g.message}", highlight=False)
+    if any(not g.passed for g in results):
+        raise typer.Exit(3)
 
 
 # ---------------------------------------------------------------------- llm
