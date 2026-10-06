@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import zlib
 
 import pytest
 from langchain_core.documents import Document
@@ -50,6 +51,9 @@ def docs():
 
 
 def make(kind, tmp_path, embeddings, namespace="kw", collection="test-col", distance="cosine"):
+    if kind == "pgvector":
+        # a Postgres server outlives the test run; scope collections to this test's tmp dir
+        collection = f"{collection}-{zlib.crc32(str(tmp_path).encode()):08x}"
     cfg = VectorStoreConfig.model_validate(
         {
             "type": kind,
