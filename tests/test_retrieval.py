@@ -227,3 +227,20 @@ def test_flashrank_reranker(setup, monkeypatch):
     assert len(out) == 2 and out[0].source == "rerank:flashrank"
     assert len(out[0].text) == max(len(c.text) for c in chunks)
     assert out[0].score >= out[1].score
+
+
+def test_parent_strategy_on_non_parent_index_falls_back(
+    make_cfg, keyword_embeddings, corpus, tmp_path, fake_llm
+):
+    """Switching to strategy=parent without re-ingesting must still return results."""
+    base = ["ingestion.cleaning.min_chars=10", "splitter.chunk_size=200", "splitter.chunk_overlap=20"]
+    dense_cfg = make_cfg(*base, "retrieval.strategy=dense")
+    store = build_store(
+        dense_cfg.vector_store, keyword_embeddings, namespace="kw", data_dir=dense_cfg.app.data_dir
+    )
+    ds = SQLiteDocStore(tmp_path / "ds.sqlite")
+    IngestionPipeline(dense_cfg, store, ds, Manifest(None)).run([str(corpus)])
+    parent_cfg = make_cfg(*base, "retrieval.strategy=parent")
+    rp = RetrievalPipeline(parent_cfg, store, ds, keyword_embeddings, lambda: fake_llm)
+    results = rp.run("espresso pressure bars")
+    assert results and "Espresso" in results[0].text

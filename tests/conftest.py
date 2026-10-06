@@ -108,7 +108,7 @@ class FakeChatModel(BaseChatModel):
             messages = prompt.to_messages() if hasattr(prompt, "to_messages") else prompt
             self.calls.append(messages)
             if name not in self.structured:
-                raise KeyError(f"FakeChatModel has no structured response for {name}")
+                raise NotImplementedError(f"FakeChatModel has no structured response for {name}")
             item = self.structured[name]
             if isinstance(item, list):
                 item = item[0] if len(item) == 1 else item.pop(0)

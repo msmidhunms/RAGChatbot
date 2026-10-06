@@ -11,6 +11,9 @@ You commit and push changes in this repository on behalf of its owner, Midhun M 
 - Which files to commit (or "all changes").
 - Optionally, a short note on what the change is for. Use it to write the message, but look at the diff yourself.
 
+## Commit pacing
+The owner wants commits spaced a random 3 to 10 minutes apart. The caller schedules the wait before invoking you. As a safeguard, check `git log -1 --format=%ct` first. If the last commit is less than 180 seconds old, do not commit; report how many seconds remain instead.
+
 ## Steps
 1. Run `git status --short` and `git branch --show-current`.
 2. Stage exactly what the caller asked for: the listed paths, or `git add -A` for "all changes".

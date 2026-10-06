@@ -226,3 +226,15 @@ def test_resolve_source_by_suffix(make_pipeline, corpus, tmp_path):
     with pytest.raises(RAGError, match="matches several sources"):
         pipe.resolve_source("sample.md")
     assert pipe.delete_source("other/sample.md") > 0
+
+
+def test_stream_with_self_check_shows_only_final_answer(make_pipeline, fake_llm):
+    fake_llm.responses = ["Venus is 900 degrees [1].", "Venus is the hottest planet [1]."]
+    fake_llm.structured["GroundednessResult"] = [
+        GroundednessResult(grounded=False, issues="900 degrees is not in the context"),
+        GroundednessResult(grounded=True),
+    ]
+    out = list(make_pipeline("generation.self_check=true").stream_chat("hottest planet?", "s1"))
+    text, result = "".join(out[:-1]), out[-1]
+    assert text == "Venus is the hottest planet [1]."
+    assert result.answer.grounded is True

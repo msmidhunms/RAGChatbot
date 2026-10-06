@@ -139,3 +139,15 @@ def test_template_file(tmp_path):
         answer_prompt(load_config(overrides=[f"generation.prompt_template={bad}"], env={}).generation)
     with pytest.raises(ConfigError, match="neither a built-in"):
         answer_prompt(load_config(overrides=["generation.prompt_template=nope"], env={}).generation)
+
+
+def test_provider_errors_are_not_retried_as_text(fake_llm, monkeypatch):
+    """Auth/quota/network errors must surface once, not trigger a second (text) LLM call."""
+
+    def boom(schema, **kwargs):
+        raise RuntimeError("401 invalid API key")
+
+    monkeypatch.setattr(type(fake_llm), "with_structured_output", lambda self, schema, **kw: boom(schema))
+    with pytest.raises(RuntimeError, match="invalid API key"):
+        gen(fake_llm).generate("q", chunks())
+    assert fake_llm.calls == []

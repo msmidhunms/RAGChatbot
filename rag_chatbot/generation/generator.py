@@ -11,7 +11,9 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator, Sequence
 
+from langchain_core.exceptions import OutputParserException
 from langchain_core.output_parsers import StrOutputParser
+from pydantic import ValidationError
 
 from rag_chatbot.config.schema import RAGConfig
 from rag_chatbot.core.logging import get_logger
@@ -83,7 +85,9 @@ class Generator:
                 log.warning("structured output returned %s; falling back to text", type(result).__name__)
             except NotImplementedError:
                 log.info("provider has no structured output; using text mode")
-            except Exception as exc:  # malformed JSON, schema violations, ...
+            except (OutputParserException, ValidationError, ValueError, TypeError) as exc:
+                # the model answered but not in the schema; provider errors (auth, quota,
+                # network) are deliberately not caught so they surface once
                 log.warning("structured generation failed (%s); falling back to text", exc)
         text = (self.prompt | self._get_llm() | StrOutputParser()).invoke(values)
         return self.from_text(text, used)

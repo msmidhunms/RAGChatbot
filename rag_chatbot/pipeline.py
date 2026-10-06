@@ -263,8 +263,13 @@ class RAGPipeline:
     def stream_chat(
         self, question: str, session_id: str | None = None, flt: Mapping[str, Any] | None = None
     ) -> Iterator[str | QueryResult]:
-        """Yield answer tokens as they are generated, then the final ``QueryResult``."""
+        """Yield answer tokens as they are generated, then the final ``QueryResult``.
+
+        With ``generation.self_check`` on, a draft may be rejected and regenerated, so
+        nothing is shown until the answer is final; it is then yielded in one piece.
+        """
         usage = TokenUsageCallback()
+        live = not self.cfg.generation.self_check
         graph = self.chat_graph if session_id else self.query_graph
         configurable: dict[str, Any] = {"stream": True}
         if session_id:
@@ -280,7 +285,8 @@ class RAGPipeline:
                 continue
             message, meta = payload
             if (
-                isinstance(message, AIMessageChunk)
+                live
+                and isinstance(message, AIMessageChunk)
                 and meta.get("langgraph_node") == "generate"
                 and ANSWER_TAG in (meta.get("tags") or [])
                 and message.content
@@ -288,7 +294,7 @@ class RAGPipeline:
                 streamed = True
                 yield message.text
         result = self._result(final, usage, session_id)
-        if not streamed:  # e.g. refusal without an LLM call
+        if not streamed:  # self-check mode, or a refusal without an LLM call
             yield result.answer.answer
         yield result
 
