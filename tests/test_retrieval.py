@@ -1,15 +1,15 @@
 import pytest
 from langchain_core.documents import Document
 
-from rag.core.types import RetrievedChunk
-from rag.generation.schemas import ExcerptScore, QueryList, RelevanceScores
-from rag.ingestion.manifest import Manifest
-from rag.ingestion.pipeline import IngestionPipeline
-from rag.retrieval.factory import RetrievalPipeline
-from rag.retrieval.hybrid import fuse
-from rag.retrieval.sparse import BM25Retriever, tokenize
-from rag.stores import build_store
-from rag.stores.docstore import SQLiteDocStore
+from rag_chatbot.core.types import RetrievedChunk
+from rag_chatbot.generation.schemas import ExcerptScore, QueryList, RelevanceScores
+from rag_chatbot.ingestion.manifest import Manifest
+from rag_chatbot.ingestion.pipeline import IngestionPipeline
+from rag_chatbot.retrieval.factory import RetrievalPipeline
+from rag_chatbot.retrieval.hybrid import fuse
+from rag_chatbot.retrieval.sparse import BM25Retriever, tokenize
+from rag_chatbot.stores import build_store
+from rag_chatbot.stores.docstore import SQLiteDocStore
 
 
 def chunk(cid, score, text="t"):
@@ -159,7 +159,7 @@ def test_llm_reranker(setup, fake_llm):
 
 
 def test_cross_encoder_reranker(setup, monkeypatch):
-    import rag.retrieval.rerankers as rr
+    import rag_chatbot.retrieval.rerankers as rr
 
     class FakeCE:
         def predict(self, pairs):
@@ -173,7 +173,7 @@ def test_cross_encoder_reranker(setup, monkeypatch):
 
 
 def test_cohere_requires_key(setup, monkeypatch):
-    from rag.core.exceptions import MissingCredentialsError
+    from rag_chatbot.core.exceptions import MissingCredentialsError
 
     monkeypatch.delenv("COHERE_API_KEY", raising=False)
     with pytest.raises(MissingCredentialsError, match="COHERE_API_KEY"):

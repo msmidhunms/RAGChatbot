@@ -3,13 +3,13 @@ import json
 import pytest
 from langchain_core.documents import Document
 
-from rag.core.exceptions import ConfigError
-from rag.core.types import RetrievedChunk
-from rag.evaluation.dataset import load_dataset
-from rag.evaluation.metrics import retrieval_scores, source_matches
-from rag.evaluation.runner import evaluate, run_eval, save_reports
-from rag.generation.schemas import JudgeScores, LLMAnswer
-from rag.pipeline import RAGPipeline
+from rag_chatbot.core.exceptions import ConfigError
+from rag_chatbot.core.types import RetrievedChunk
+from rag_chatbot.evaluation.dataset import load_dataset
+from rag_chatbot.evaluation.metrics import retrieval_scores, source_matches
+from rag_chatbot.evaluation.runner import evaluate, run_eval, save_reports
+from rag_chatbot.generation.schemas import JudgeScores, LLMAnswer
+from rag_chatbot.pipeline import RAGPipeline
 from tests.conftest import FIXTURES
 
 

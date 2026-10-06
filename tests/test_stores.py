@@ -4,12 +4,12 @@ import os
 import pytest
 from langchain_core.documents import Document
 
-from rag.config.schema import VectorStoreConfig
-from rag.core.exceptions import ConfigError
-from rag.stores import build_store
-from rag.stores.base import mmr_select
-from rag.stores.docstore import PARENT, SQLiteDocStore
-from rag.stores.filters import matches, normalize_filter, to_chroma, to_qdrant
+from rag_chatbot.config.schema import VectorStoreConfig
+from rag_chatbot.core.exceptions import ConfigError
+from rag_chatbot.stores import build_store
+from rag_chatbot.stores.base import mmr_select
+from rag_chatbot.stores.docstore import PARENT, SQLiteDocStore
+from rag_chatbot.stores.filters import matches, normalize_filter, to_chroma, to_qdrant
 
 BACKENDS = [
     pytest.param("memory", id="memory"),

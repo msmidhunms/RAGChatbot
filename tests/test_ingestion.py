@@ -3,16 +3,16 @@ from pathlib import Path
 import pytest
 from langchain_core.documents import Document
 
-from rag.config.schema import CleaningConfig, IngestionConfig, SplitterConfig
-from rag.core.exceptions import ConfigError, RAGError
-from rag.ingestion.cleaners import clean_documents, normalize_text, strip_repeated_lines
-from rag.ingestion.loaders import discover_sources, html_to_text, load_source, select_path
-from rag.ingestion.manifest import Manifest
-from rag.ingestion.metadata import enrich_chunks, normalize_source, sanitize_metadata
-from rag.ingestion.pipeline import IngestionPipeline
-from rag.ingestion.splitters import build_splitter
-from rag.stores import build_store
-from rag.stores.docstore import PARENT, SQLiteDocStore
+from rag_chatbot.config.schema import CleaningConfig, IngestionConfig, SplitterConfig
+from rag_chatbot.core.exceptions import ConfigError, RAGError
+from rag_chatbot.ingestion.cleaners import clean_documents, normalize_text, strip_repeated_lines
+from rag_chatbot.ingestion.loaders import discover_sources, html_to_text, load_source, select_path
+from rag_chatbot.ingestion.manifest import Manifest
+from rag_chatbot.ingestion.metadata import enrich_chunks, normalize_source, sanitize_metadata
+from rag_chatbot.ingestion.pipeline import IngestionPipeline
+from rag_chatbot.ingestion.splitters import build_splitter
+from rag_chatbot.stores import build_store
+from rag_chatbot.stores.docstore import PARENT, SQLiteDocStore
 from tests.conftest import FIXTURES, make_pdf
 
 ING = IngestionConfig()

@@ -110,7 +110,7 @@ Retrieval metrics (`hit_rate`, `mrr`, `recall`) need no LLM. `faithfulness`, `an
 ## Python API
 
 ```python
-from rag.pipeline import RAGPipeline
+from rag_chatbot.pipeline import RAGPipeline
 
 rag = RAGPipeline.from_config("configs/default.yaml", ["retrieval.k=8"])
 rag.ingest(["docs/"])
@@ -128,7 +128,7 @@ for item in rag.stream_chat("When was it published?", session):
 Each component family has a registry; adding a backend is one decorated function, no core changes:
 
 ```python
-from rag.retrieval.rerankers import RERANKERS, _apply
+from rag_chatbot.retrieval.rerankers import RERANKERS, _apply
 
 @RERANKERS.register("by_length")
 def by_length(cfg, get_llm):
@@ -137,23 +137,23 @@ def by_length(cfg, get_llm):
 
 Registries: `LOADERS`, `SPLITTERS`, `STORES`, `EMBEDDING_PROVIDERS`, `LLM_PROVIDERS`, `QUERY_TRANSFORMS`,
 `COMPRESSORS`, `RERANKERS`, prompt `STYLE`s. Selecting a new name in YAML also requires adding it to the
-corresponding `Literal` in `rag/config/schema.py`, which keeps typos caught at load time.
+corresponding `Literal` in `rag_chatbot/config/schema.py`, which keeps typos caught at load time.
 
 ## Project layout
 
 ```
-rag/config        schema (pydantic) and layered loader
-rag/core          registry, exceptions, logging, shared types
-rag/providers     chat model and embeddings factories
-rag/cache.py      persistent embedding cache
-rag/ingestion     loaders, cleaners, splitters, metadata, manifest, pipeline
-rag/stores        vector store backends, filters, SQLite docstore
-rag/retrieval     dense, BM25, hybrid, parent, transforms, compression, rerankers
-rag/generation    prompts, schemas, context budgeting, answer generator
-rag/memory        history selection, summaries, checkpointers
-rag/graph         LangGraph state, nodes and builder
-rag/evaluation    datasets, metrics, runner
-rag/pipeline.py   RAGPipeline facade used by the CLI and API
+rag_chatbot/config        schema (pydantic) and layered loader
+rag_chatbot/core          registry, exceptions, logging, shared types
+rag_chatbot/providers     chat model and embeddings factories
+rag_chatbot/cache.py      persistent embedding cache
+rag_chatbot/ingestion     loaders, cleaners, splitters, metadata, manifest, pipeline
+rag_chatbot/stores        vector store backends, filters, SQLite docstore
+rag_chatbot/retrieval     dense, BM25, hybrid, parent, transforms, compression, rerankers
+rag_chatbot/generation    prompts, schemas, context budgeting, answer generator
+rag_chatbot/memory        history selection, summaries, checkpointers
+rag_chatbot/graph         LangGraph state, nodes and builder
+rag_chatbot/evaluation    datasets, metrics, runner
+rag_chatbot/pipeline.py   RAGPipeline facade used by the CLI and API
 ```
 
 ## Development
@@ -161,7 +161,7 @@ rag/pipeline.py   RAGPipeline facade used by the CLI and API
 ```bash
 pip install -e '.[dev,faiss,qdrant]'
 pytest            # fully offline: fake LLM and keyword embeddings
-ruff check . && ruff format --check . && mypy rag
+ruff check . && ruff format --check . && mypy rag_chatbot
 ```
 
 PGVector tests run when `PG_CONN` points at a Postgres with the `vector` extension.

@@ -4,7 +4,7 @@ import pytest
 from langchain_core.language_models import FakeListChatModel
 from typer.testing import CliRunner
 
-from rag import cli
+from rag_chatbot import cli
 
 runner = CliRunner()
 
@@ -42,7 +42,7 @@ def test_config_validate_ok(monkeypatch):
 
 
 def test_llm_command_raw(monkeypatch):
-    monkeypatch.setattr("rag.providers.build_llm", lambda cfg: FakeListChatModel(responses=["pong"]))
+    monkeypatch.setattr("rag_chatbot.providers.build_llm", lambda cfg: FakeListChatModel(responses=["pong"]))
     result = runner.invoke(cli.app, ["llm", "ping", "--raw"])
     assert result.exit_code == 0, result.output
     assert "pong" in result.output
@@ -58,8 +58,8 @@ def test_llm_command_missing_key():
 @pytest.fixture
 def e2e(monkeypatch, tmp_path, keyword_embeddings, fake_llm):
     """Run CLI commands against a FAISS-backed store with fake models."""
-    from rag.generation.schemas import LLMAnswer
-    from rag.pipeline import RAGPipeline
+    from rag_chatbot.generation.schemas import LLMAnswer
+    from rag_chatbot.pipeline import RAGPipeline
 
     pytest.importorskip("faiss")
     monkeypatch.setattr(
@@ -152,8 +152,8 @@ def test_bad_filter_and_tag(e2e):
 
 
 def test_eval_command(e2e, monkeypatch, keyword_embeddings, fake_llm, tmp_path, corpus):
-    from rag.generation.schemas import JudgeScores
-    from rag.pipeline import RAGPipeline
+    from rag_chatbot.generation.schemas import JudgeScores
+    from rag_chatbot.pipeline import RAGPipeline
     from tests.conftest import FIXTURES
 
     fake_llm.structured["JudgeScores"] = JudgeScores(faithfulness=1, answer_relevance=0.5, correctness=1)

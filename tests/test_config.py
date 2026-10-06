@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rag.config import RAGConfig, dump_config, load_config, missing_env_vars, required_env_vars
-from rag.core.exceptions import ConfigError
+from rag_chatbot.config import RAGConfig, dump_config, load_config, missing_env_vars, required_env_vars
+from rag_chatbot.core.exceptions import ConfigError
 
 CONFIGS = Path(__file__).resolve().parent.parent / "configs"
 

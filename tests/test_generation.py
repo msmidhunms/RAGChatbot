@@ -1,13 +1,13 @@
 import pytest
 from langchain_core.documents import Document
 
-from rag.config import load_config
-from rag.core.exceptions import ConfigError
-from rag.core.types import RetrievedChunk
-from rag.generation.context import count_tokens, format_context
-from rag.generation.generator import NO_ANSWER, Generator
-from rag.generation.prompts import answer_prompt
-from rag.generation.schemas import LLMAnswer
+from rag_chatbot.config import load_config
+from rag_chatbot.core.exceptions import ConfigError
+from rag_chatbot.core.types import RetrievedChunk
+from rag_chatbot.generation.context import count_tokens, format_context
+from rag_chatbot.generation.generator import NO_ANSWER, Generator
+from rag_chatbot.generation.prompts import answer_prompt
+from rag_chatbot.generation.schemas import LLMAnswer
 
 
 def chunks():

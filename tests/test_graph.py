@@ -1,11 +1,11 @@
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from rag.config.schema import MemoryConfig
-from rag.generation.generator import NO_ANSWER
-from rag.generation.schemas import GradeResult, GroundednessResult, LLMAnswer
-from rag.memory.history import build_checkpointer, format_history, select_history, update_summary
-from rag.pipeline import RAGPipeline
+from rag_chatbot.config.schema import MemoryConfig
+from rag_chatbot.generation.generator import NO_ANSWER
+from rag_chatbot.generation.schemas import GradeResult, GroundednessResult, LLMAnswer
+from rag_chatbot.memory.history import build_checkpointer, format_history, select_history, update_summary
+from rag_chatbot.pipeline import RAGPipeline
 
 
 @pytest.fixture

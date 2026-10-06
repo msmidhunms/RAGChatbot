@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.scripts]
-rag = "rag.cli:app"
+rag = "rag_chatbot.cli:app"
 
 [project.optional-dependencies]
 openai = ["langchain-openai>=0.2"]
@@ -45,7 +45,7 @@ dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "types-PyYAML"]
 all = ["ragchatbot[openai,anthropic,local,faiss,qdrant,pgvector,docs,semantic,rerank]"]
 
 [tool.setuptools.packages.find]
-include = ["rag*"]
+include = ["rag_chatbot*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

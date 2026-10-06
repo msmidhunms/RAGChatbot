@@ -3,11 +3,11 @@ import math
 import pytest
 from langchain_core.embeddings import DeterministicFakeEmbedding, Embeddings
 
-from rag.cache import CachedEmbeddings, NormalizedEmbeddings, SQLiteEmbeddingStore
-from rag.config import load_config
-from rag.core.exceptions import MissingCredentialsError
-from rag.providers import build_embeddings, build_llm, embedding_namespace
-from rag.providers.embeddings import EMBEDDING_PROVIDERS
+from rag_chatbot.cache import CachedEmbeddings, NormalizedEmbeddings, SQLiteEmbeddingStore
+from rag_chatbot.config import load_config
+from rag_chatbot.core.exceptions import MissingCredentialsError
+from rag_chatbot.providers import build_embeddings, build_llm, embedding_namespace
+from rag_chatbot.providers.embeddings import EMBEDDING_PROVIDERS
 
 KEYS = {"GOOGLE_API_KEY": "test", "OPENAI_API_KEY": "test", "ANTHROPIC_API_KEY": "test"}
 

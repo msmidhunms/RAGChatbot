@@ -19,7 +19,7 @@ from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResu
 from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel
 
-from rag.config import load_config
+from rag_chatbot.config import load_config
 
 FIXTURES = Path(__file__).parent / "fixtures"
 _WORD = re.compile(r"[a-z0-9]+")

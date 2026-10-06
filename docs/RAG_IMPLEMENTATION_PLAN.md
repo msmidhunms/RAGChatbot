@@ -91,7 +91,7 @@ RAGChatbot/
 
 ## Module design
 
-### 1. Configuration (`rag/config/`)
+### 1. Configuration (`rag_chatbot/config/`)
 Nested Pydantic v2 models, each with `extra="forbid"` so typos fail fast. Use discriminated unions where each backend needs different params.
 
 ```yaml
@@ -183,10 +183,10 @@ It also calls `load_dotenv()`. Validators check that:
 - the API-key env var for the chosen provider is present (clear error message if not)
 - the `anthropic` provider is never used for embeddings (Anthropic has no embedding model)
 
-### 2. Registry / plugin system (`rag/core/registry.py`)
+### 2. Registry / plugin system (`rag_chatbot/core/registry.py`)
 `Registry[T]` holds a `name -> factory(cfg, **deps)` mapping, with `@LOADERS.register("pdf")` decorators, `get(name)` and `available()`. There is one registry each for loaders, splitters, embeddings, stores, query transforms, rerankers, compressors and prompts. Imports of heavy or optional dependencies happen inside the factory functions. A missing extra raises `MissingDependencyError("pip install ragchatbot[qdrant]")`. Adding a backend means writing one decorated function, with no edits to core code.
 
-### 3. Providers (`rag/providers/`)
+### 3. Providers (`rag_chatbot/providers/`)
 - `build_llm(llm_cfg)`: `init_chat_model(model, model_provider, temperature, max_tokens, timeout, max_retries)`. This covers google_genai, openai, anthropic and ollama, and generalises `main.py`.
 - `build_embeddings(emb_cfg)`: maps each provider to its class:
   - `GoogleGenerativeAIEmbeddings`
@@ -197,7 +197,7 @@ It also calls `load_dotenv()`. Validators check that:
   It is wrapped in `CacheBackedEmbeddings` (`LocalFileStore`) when the embedding cache is enabled, namespaced by model so a model switch never reuses stale vectors.
 - The embedding model and dimension are written into the collection metadata. A query against a collection built with a different embedding model raises a clear error. Mixing models in one collection is the most common RAG configuration bug.
 
-### 4. Ingestion (`rag/ingestion/`)
+### 4. Ingestion (`rag_chatbot/ingestion/`)
 - **Loaders**, by extension, each overridable in config:
   - PDF: `PyPDFLoader`, or `PyMuPDFLoader` when `pymupdf` is chosen
   - TXT: `TextLoader` (with encoding autodetect)
@@ -224,7 +224,7 @@ It also calls `load_dotenv()`. Validators check that:
   - Embedding and upserting run in `batch_size` batches.
   - Chunks are also written to the docstore so BM25 and parent retrieval can use them.
 
-### 5. Vector stores (`rag/stores/`)
+### 5. Vector stores (`rag_chatbot/stores/`)
 The `VectorStoreAdapter` protocol has these methods:
 - `add(chunks, ids)`
 - `delete_by_doc(doc_id)`
@@ -242,7 +242,7 @@ The `VectorStoreAdapter` protocol has these methods:
 
 `filters.py` turns a store-agnostic filter dict such as `{"source": "a.pdf", "page": {"$gte": 3}}` into each backend's filter format.
 
-### 6. Retrieval (`rag/retrieval/`)
+### 6. Retrieval (`rag_chatbot/retrieval/`)
 `build_retriever(cfg, store, docstore, llm, embeddings)` builds the retriever in this order:
 1. **Base retriever** (`retrieval.strategy`):
    - dense: `store.as_retriever(search_type, k, fetch_k, lambda_mult, score_threshold, filter)`
@@ -264,7 +264,7 @@ The `VectorStoreAdapter` protocol has these methods:
 
 Output is `list[RetrievedChunk]` (doc, score, rank, retriever_source) so the CLI can show why each chunk was picked.
 
-### 7. Generation (`rag/generation/`)
+### 7. Generation (`rag_chatbot/generation/`)
 - **Prompts:**
   - Named templates in a registry: `default`, `concise`, `detailed`, `strict_citations`
   - A `path/to/template.txt` override is also accepted
@@ -278,7 +278,7 @@ Output is `list[RetrievedChunk]` (doc, score, rank, retriever_source) so the CLI
   - otherwise it uses a plain `ChatPromptTemplate | llm | StrOutputParser` with streaming (`.stream`) for chat
   - If no chunks pass the threshold and `answer_when_no_context: refuse`, it returns a fixed "not found in the documents" answer without calling the LLM.
 
-### 8. Conversation memory (`rag/memory/`)
+### 8. Conversation memory (`rag_chatbot/memory/`)
 - LangGraph checkpointer: `MemorySaver`, or `SqliteSaver` at `memory.path`, keyed by `thread_id` (the CLI `--session` flag).
 - Strategies:
   - buffer: full history
@@ -286,7 +286,7 @@ Output is `list[RetrievedChunk]` (doc, score, rank, retriever_source) so the CLI
   - summary: an LLM summarises older turns into a running summary
 - With `condense_with_history`, follow-up questions are rewritten into standalone questions before retrieval.
 
-### 9. Orchestration with LangGraph (`rag/graph/`)
+### 9. Orchestration with LangGraph (`rag_chatbot/graph/`)
 `RAGState` holds `messages`, `question`, `standalone_question`, `queries`, `documents`, `answer`, `retries` and `timings`.
 
 Nodes are added to the graph only when enabled in config:
@@ -305,7 +305,7 @@ START → condense (if memory & history) → transform_query (if != none)
 
 The CLI and tests depend only on the facade.
 
-### 10. Evaluation (`rag/evaluation/`)
+### 10. Evaluation (`rag_chatbot/evaluation/`)
 - Dataset: JSONL records with `question`, `ground_truth`, `expected_sources[]`.
 - Retrieval metrics (no LLM needed): hit_rate@k, MRR, recall@k, computed by matching on `source` or `doc_id`.
 - Generation metrics: LLM-as-judge with structured output for faithfulness (claims supported by context), answer relevance, and correctness against the ground truth. An optional `ragas` integration ships as an extra.
@@ -316,7 +316,7 @@ The CLI and tests depend only on the facade.
 - A callback handler records per-node latency and token usage, shown with the `--verbose` flag.
 - Embedding cache (above). Optional LLM cache via `set_llm_cache(SQLiteCache)`.
 
-### 12. CLI (`rag/cli.py`, Typer + rich)
+### 12. CLI (`rag_chatbot/cli.py`, Typer + rich)
 All commands accept `--config/-c` and repeatable `--set key=value`.
 - `rag ingest PATH... [--tag k=v] [--reset] [--no-incremental]`: prints an `IngestReport` table.
 - `rag query "question" [--filter source=x.pdf] [--show-sources] [--json]`: one-shot answer with citations.
@@ -326,7 +326,7 @@ All commands accept `--config/-c` and repeatable `--set key=value`.
 - `rag store stats|reset|delete --source X`
 - `rag config show|validate`: prints the merged config with secrets masked.
 
-`main.py` becomes `from rag.cli import app; app()`. A `[project.scripts] rag = "rag.cli:app"` entry is also added.
+`main.py` becomes `from rag_chatbot.cli import app; app()`. A `[project.scripts] rag = "rag_chatbot.cli:app"` entry is also added.
 
 ### 13. Dependencies (`pyproject.toml`)
 - **Core:**
@@ -372,7 +372,7 @@ All commands accept `--config/-c` and repeatable `--set key=value`.
   - graph paths with grading and self-check toggled on and off
   - CLI via `typer.testing.CliRunner`
 - Qdrant tests use local mode (`path=`); PGVector tests are skipped unless `PG_CONN` is set.
-- `ruff check` and `mypy rag`.
+- `ruff check` and `mypy rag_chatbot`.
 - Manual end to end, with `GOOGLE_API_KEY`:
   1. `rag ingest tests/fixtures`
   2. `rag query "..." --show-sources`
@@ -386,20 +386,20 @@ All commands accept `--config/-c` and repeatable `--set key=value`.
 
 ### What steps 1–2 changed
 - **Already in place:**
-  - `rag/config` (schema and `load_config`, with `ensure_env` and `missing_env_vars`)
-  - `rag/core` (`Registry`, `require`, exceptions, logging)
-  - `rag/providers` (`build_llm`, `build_embeddings`, `embedding_namespace`)
-  - `rag/cache.py` (`CachedEmbeddings`, `NormalizedEmbeddings`)
-  - `rag/cli.py` (`config show|validate`, `llm`)
+  - `rag_chatbot/config` (schema and `load_config`, with `ensure_env` and `missing_env_vars`)
+  - `rag_chatbot/core` (`Registry`, `require`, exceptions, logging)
+  - `rag_chatbot/providers` (`build_llm`, `build_embeddings`, `embedding_namespace`)
+  - `rag_chatbot/cache.py` (`CachedEmbeddings`, `NormalizedEmbeddings`)
+  - `rag_chatbot/cli.py` (`config show|validate`, `llm`)
 - **Library constraints:** the installed stack is LangChain 1.x. `MultiQueryRetriever`, `EnsembleRetriever`, `ContextualCompressionRetriever` and `ParentDocumentRetriever` now exist only in the legacy `langchain_classic` package. `BM25Retriever`, the `FAISS` store and most loaders exist only in `langchain_community`, which is being retired.
 - **Decision:** build those pieces in-repo on top of `langchain_core` (`Document`, `Embeddings`, prompts, runnables) and maintained libraries: pypdf, docx2txt, bs4, rank_bm25, faiss, langchain-chroma, langchain-qdrant, langchain-postgres, langchain-text-splitters and langgraph. Each piece is small, and our own code gives full control over scores, filters and metadata.
 - **Dropped:** the `ragas` integration (it is heavy; our own metrics cover the plan). The `langchain-community` dependency is removed from `pyproject.toml`.
 
-### Shared types (`rag/core/types.py`)
+### Shared types (`rag_chatbot/core/types.py`)
 - `RetrievedChunk(document, score, rank, source)`, where `source` names the retriever that produced the chunk (e.g. "dense", "bm25", "rrf").
 - `IngestReport(files_seen, files_ingested, files_skipped, chunks, errors, seconds)`.
 
-### Step 3: ingestion (`rag/ingestion/`)
+### Step 3: ingestion (`rag_chatbot/ingestion/`)
 - **`loaders.py`**: `LOADERS: Registry[(path_or_url, IngestionConfig) -> list[Document]]`. Each source is resolved to a loader by extension, with `ingestion.loaders` overrides taking priority.
   - `pypdf`: one Document per page, `metadata.page` 1-based
   - `pymupdf`: optional, extra `docs`
@@ -436,7 +436,7 @@ All commands accept `--config/-c` and repeatable `--set key=value`.
   - A file that fails is recorded in `errors`; the run continues.
   - Sources removed from disk are not deleted automatically; `rag store delete` handles that.
 
-### Step 4: vector stores (`rag/stores/`)
+### Step 4: vector stores (`rag_chatbot/stores/`)
 - **`base.py`**: `VectorStore` ABC with:
   - `add(chunks: list[Document])` (ids taken from `metadata.chunk_id`)
   - `delete(ids)`
@@ -456,7 +456,7 @@ All commands accept `--config/-c` and repeatable `--set key=value`.
   - FAISS and the docstore: a Python predicate (`matches(metadata, filter)`)
 - **`docstore.py`**: `SQLiteDocStore` (`data_dir/docstore.sqlite`) holds chunk_id → (content, metadata JSON, doc_id), plus parents for parent retrieval. It supports `put`, `get_many`, `delete_doc`, `all_chunks(filter)` and `count`. It is the BM25 corpus and the source of truth for `rag store stats`.
 
-### Step 5: retrieval (`rag/retrieval/`)
+### Step 5: retrieval (`rag_chatbot/retrieval/`)
 - **`base.py`**: the `Retriever` protocol is `retrieve(query: str, k: int, filter: dict|None) -> list[RetrievedChunk]`.
 - **`dense.py`**: similarity, mmr, or threshold (drop results below `score_threshold`).
 - **`sparse.py`**: `rank_bm25.BM25Okapi` over the docstore chunks, using simple lowercase word tokenisation. The index is rebuilt lazily when the docstore's change counter moves. Filters are applied via `matches`.
@@ -483,7 +483,7 @@ All commands accept `--config/-c` and repeatable `--set key=value`.
   - `llm_extract`: the LLM keeps only the relevant sentences; chunks that end up empty are dropped
 - **`factory.py`**: `build_retriever(cfg, store, docstore, embeddings, llm) -> RetrievalPipeline`, where `RetrievalPipeline.run(question, history, filter) -> list[RetrievedChunk]` runs transform → per-query base retrieval → fuse → compress → rerank. The pipeline's stages are also exposed individually for the graph nodes.
 
-### Step 6: generation (`rag/generation/`)
+### Step 6: generation (`rag_chatbot/generation/`)
 - **`prompts.py`**: `PROMPTS` registry of `ChatPromptTemplate`s:
   - answer templates: default, concise, detailed, strict_citations
   - helper prompts: condense, rewrite, multi_query, hyde, step_back, grade, self_check, extract, rerank, summary
@@ -515,7 +515,7 @@ All commands accept `--config/-c` and repeatable `--set key=value`.
   
   Every node records its latency in `timings`.
 - **`graph/builder.py`**: `build_graph(components, cfg, checkpointer)` wires in only the enabled nodes, using conditional edges.
-- **`rag/pipeline.py`**: `RAGPipeline.from_config(cfg)` lazily builds the embeddings, store, docstore, LLM, retriever, generator and graph. Its methods:
+- **`rag_chatbot/pipeline.py`**: `RAGPipeline.from_config(cfg)` lazily builds the embeddings, store, docstore, LLM, retriever, generator and graph. Its methods:
   - `ingest(sources, tags, reset)`
   - `retrieve(q, filter)`
   - `query(q, filter) -> QueryResult(answer, chunks, timings)`, run without memory under a fresh thread id
@@ -525,7 +525,7 @@ All commands accept `--config/-c` and repeatable `--set key=value`.
   
   The components can also be injected directly (`RAGPipeline(cfg, llm=..., embeddings=...)`) so tests can use fake models.
 
-### Step 8: CLI (`rag/cli.py`, extend)
+### Step 8: CLI (`rag_chatbot/cli.py`, extend)
 - **Commands:**
   - `ingest [PATHS]... --tag k=v --reset --no-incremental`: Rich table of the `IngestReport`
   - `query Q --filter k=v --show-sources --json`
@@ -562,5 +562,5 @@ All commands accept `--config/-c` and repeatable `--set key=value`.
   - `test_pipeline_cli.py` (ingest, query, retrieve and store commands end to end with fakes)
   - `test_eval.py`
 - **Install for development:** `chromadb`/`langchain-chroma`, `faiss-cpu`, `qdrant-client`/`langchain-qdrant`, `pypdf`, `docx2txt`, `beautifulsoup4`, `rank-bm25`, `langgraph-checkpoint-sqlite`.
-- **Checks:** `ruff check`, `ruff format`, `mypy rag` and `pytest` before each commit. There is one commit per step, each pushed to `claude/configurable-rag-plan-voik2a`.
+- **Checks:** `ruff check`, `ruff format`, `mypy rag_chatbot` and `pytest` before each commit. There is one commit per step, each pushed to `claude/configurable-rag-plan-voik2a`.
 - **Live checks:** model calls against real providers cannot run here (no API keys). The final report says so and gives the user the manual smoke-test commands.

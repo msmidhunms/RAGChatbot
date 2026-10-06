@@ -2,8 +2,8 @@ import logging
 
 import pytest
 
-from rag.core import MissingDependencyError, Registry, RegistryError, require
-from rag.core.logging import configure_logging, get_logger
+from rag_chatbot.core import MissingDependencyError, Registry, RegistryError, require
+from rag_chatbot.core.logging import configure_logging, get_logger
 
 
 def test_registry_register_and_get():
@@ -53,9 +53,9 @@ def test_configure_logging_idempotent():
     logger = configure_logging("DEBUG")
     configure_logging("INFO")
     assert logger.level == logging.INFO
-    assert sum(h.get_name() == "rag-default" for h in logger.handlers) == 1
-    assert get_logger("ingestion").name == "rag.ingestion"
-    assert get_logger("rag.stores").name == "rag.stores"
+    assert sum(h.get_name() == "rag_chatbot-default" for h in logger.handlers) == 1
+    assert get_logger("ingestion").name == "rag_chatbot.ingestion"
+    assert get_logger("rag_chatbot.stores").name == "rag_chatbot.stores"
 
 
 def test_require_core_dependency_message():
@@ -64,8 +64,8 @@ def test_require_core_dependency_message():
 
 
 def test_setup_tracing(monkeypatch):
-    from rag.config.schema import ObservabilityConfig
-    from rag.observability.tracing import setup_tracing
+    from rag_chatbot.config.schema import ObservabilityConfig
+    from rag_chatbot.observability.tracing import setup_tracing
 
     monkeypatch.delenv("LANGSMITH_TRACING", raising=False)
     monkeypatch.delenv("LANGSMITH_PROJECT", raising=False)
