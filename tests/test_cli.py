@@ -174,3 +174,49 @@ def test_eval_command(e2e, monkeypatch, keyword_embeddings, fake_llm, tmp_path, 
     assert result.exit_code == 0, result.output
     assert "hit_rate" in result.output and "faithfulness" in result.output
     assert list((tmp_path / "eval").glob("eval-*.json"))
+
+
+# --------------------------------------------------------------- error handling
+class _Boom:
+    def query(self, *a, **k):
+        raise RuntimeError("upstream 503")
+
+
+def test_unexpected_errors_print_one_line(monkeypatch):
+    monkeypatch.setattr(cli, "_pipeline", lambda cfg: _Boom())
+    result = runner.invoke(cli.app, ["query", "x"])
+    assert result.exit_code == 1
+    assert "error: RuntimeError: upstream 503" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_debug_env_shows_traceback(monkeypatch):
+    monkeypatch.setattr(cli, "_pipeline", lambda cfg: _Boom())
+    monkeypatch.setenv("RAG_DEBUG", "1")
+    result = runner.invoke(cli.app, ["query", "x"])
+    assert isinstance(result.exception, RuntimeError)
+
+
+def test_store_stats_needs_no_api_key(tmp_path, keyword_embeddings, corpus):
+    """Maintenance commands never embed, so they must work without provider credentials."""
+    pytest.importorskip("faiss")
+    from rag_chatbot.config import load_config
+    from rag_chatbot.pipeline import RAGPipeline
+
+    sets = [
+        f"app.data_dir={tmp_path / 'data'}",
+        "vector_store.type=faiss",
+        f"vector_store.faiss.index_dir={tmp_path / 'faiss'}",
+        "ingestion.cleaning.min_chars=10",
+    ]
+    cfg = load_config(overrides=sets, env={})
+    RAGPipeline(cfg, embeddings=keyword_embeddings).ingest([str(corpus)])
+
+    args = [x for s in sets for x in ("--set", s)]
+    stats = runner.invoke(cli.app, ["store", "stats", *args])  # real pipeline, GOOGLE_API_KEY unset
+    assert stats.exit_code == 0, stats.output
+    assert "sample.md" in stats.output
+    deleted = runner.invoke(cli.app, ["store", "delete", "--source", "sample.md", *args])
+    assert deleted.exit_code == 0, deleted.output
+    query = runner.invoke(cli.app, ["retrieve", "espresso", *args])
+    assert query.exit_code == 1 and "GOOGLE_API_KEY" in query.output

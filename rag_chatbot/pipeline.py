@@ -35,6 +35,7 @@ from rag_chatbot.ingestion.pipeline import IngestionPipeline
 from rag_chatbot.memory.history import build_checkpointer
 from rag_chatbot.observability.tracing import TokenUsageCallback, log_timings, setup_tracing
 from rag_chatbot.providers import build_embeddings, build_llm, embedding_namespace
+from rag_chatbot.providers.embeddings import LazyEmbeddings
 from rag_chatbot.retrieval.factory import RetrievalPipeline
 from rag_chatbot.stores import SQLiteDocStore, VectorStore, build_store
 
@@ -103,8 +104,13 @@ class RAGPipeline:
     @property
     def embeddings(self) -> Embeddings:
         if self._embeddings is None:
-            self._embeddings = build_embeddings(self.cfg.embeddings)
+            self._embeddings = LazyEmbeddings(lambda: build_embeddings(self.cfg.embeddings))
         return self._embeddings
+
+    def _require_embeddings(self) -> None:
+        """Fail fast on missing credentials before ingesting or searching."""
+        if isinstance(self.embeddings, LazyEmbeddings):
+            self.embeddings.ensure_ready()
 
     @property
     def persistent(self) -> bool:
@@ -175,6 +181,7 @@ class RAGPipeline:
         reset: bool = False,
         incremental: bool | None = None,
     ) -> IngestReport:
+        self._require_embeddings()
         return self.ingestion.run(sources, tags=tags, reset=reset, incremental=incremental)
 
     def resolve_source(self, source: str) -> str:
@@ -212,6 +219,7 @@ class RAGPipeline:
 
     # ------------------------------------------------------------- retrieve
     def retrieve(self, question: str, flt: Mapping[str, Any] | None = None) -> list[RetrievedChunk]:
+        self._require_embeddings()
         return self.retrieval.run(question, "", flt)
 
     # ---------------------------------------------------------------- query
@@ -249,12 +257,14 @@ class RAGPipeline:
 
     def query(self, question: str, flt: Mapping[str, Any] | None = None) -> QueryResult:
         """One-shot question without conversation memory."""
+        self._require_embeddings()
         usage = TokenUsageCallback()
         state = self.query_graph.invoke(self._input(question, flt), {"callbacks": [usage]})
         return self._result(state, usage, None)
 
     def chat(self, question: str, session_id: str, flt: Mapping[str, Any] | None = None) -> QueryResult:
         """One conversational turn; history is kept per ``session_id``."""
+        self._require_embeddings()
         usage = TokenUsageCallback()
         config = {"configurable": {"thread_id": session_id}, "callbacks": [usage]}
         state = self.chat_graph.invoke(self._input(question, flt), config)
@@ -268,6 +278,7 @@ class RAGPipeline:
         With ``generation.self_check`` on, a draft may be rejected and regenerated, so
         nothing is shown until the answer is final; it is then yielded in one piece.
         """
+        self._require_embeddings()
         usage = TokenUsageCallback()
         live = not self.cfg.generation.self_check
         graph = self.chat_graph if session_id else self.query_graph

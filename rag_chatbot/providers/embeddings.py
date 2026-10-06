@@ -37,6 +37,30 @@ def build_embeddings(cfg: EmbeddingsConfig, *, env: Mapping[str, str] | None = N
     return embeddings
 
 
+class LazyEmbeddings(Embeddings):
+    """Builds the real embeddings on first use.
+
+    Lets commands that never embed (store stats/reset/delete, chat history) run
+    without provider credentials; ``ensure_ready`` forces the build early so
+    missing keys are reported before work starts.
+    """
+
+    def __init__(self, factory: Callable[[], Embeddings]) -> None:
+        self._factory = factory
+        self._inner: Embeddings | None = None
+
+    def ensure_ready(self) -> Embeddings:
+        if self._inner is None:
+            self._inner = self._factory()
+        return self._inner
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self.ensure_ready().embed_documents(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.ensure_ready().embed_query(text)
+
+
 def embedding_namespace(cfg: EmbeddingsConfig) -> str:
     """Identifies the vector space; also used later to guard vector store collections."""
     return f"{cfg.provider}:{cfg.model}"

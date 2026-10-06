@@ -7,6 +7,7 @@ Exit codes: 0 ok, 1 runtime error, 2 invalid configuration.
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -60,14 +61,27 @@ def _load(config: Path | None, overrides: list[str] | None, verbose: bool = Fals
 
 
 @contextmanager
-def _errors() -> Iterator[None]:
+def _errors(verbose: bool = False) -> Iterator[None]:
+    """Turn exceptions into a one-line message and an exit code.
+
+    Unexpected errors (provider, network, IO) print ``error: Type: message``; set
+    ``RAG_DEBUG=1`` or pass ``--verbose`` to get the full traceback instead.
+    """
     try:
         yield
+    except typer.Exit:
+        raise
     except ConfigError as exc:
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(2) from None
     except RAGError as exc:
         err_console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from None
+    except Exception as exc:
+        if verbose or os.environ.get("RAG_DEBUG"):
+            raise
+        err_console.print(f"[red]error: {type(exc).__name__}: {exc}[/red]", markup=True, highlight=False)
+        err_console.print("[dim]set RAG_DEBUG=1 for the full traceback[/dim]")
         raise typer.Exit(1) from None
 
 
@@ -213,7 +227,7 @@ def query(
 ) -> None:
     """Answer one question (no conversation memory)."""
     cfg = _load(config, set_, verbose)
-    with _errors():
+    with _errors(verbose):
         result = _pipeline(cfg).query(question, _pairs(filter_, "--filter") or None)
     if as_json:
         console.print_json(json.dumps(result.to_dict(), default=str))
