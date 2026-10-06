@@ -231,7 +231,7 @@ class QueryTransformConfig(StrictModel):
 
 
 class RerankerConfig(StrictModel):
-    type: Literal["none", "cross_encoder", "cohere", "llm"] = "none"
+    type: Literal["none", "cross_encoder", "flashrank", "cohere", "llm"] = "none"
     model: str = "BAAI/bge-reranker-base"
     top_n: int = Field(4, gt=0)
 

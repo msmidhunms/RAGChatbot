@@ -103,7 +103,7 @@ query_transform:
   condense_with_history: true
 
 reranker:
-  type: none                      # none | cross_encoder | cohere | llm
+  type: none                      # none | cross_encoder | flashrank | cohere | llm
   model: BAAI/bge-reranker-base
   top_n: 4
 

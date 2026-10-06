@@ -43,7 +43,7 @@ qdrant = ["qdrant-client>=1.10"]
 pgvector = ["langchain-postgres>=0.0.12", "psycopg[binary]>=3.1"]
 docs = ["docx2txt>=0.8", "pymupdf>=1.24"]
 semantic = ["langchain-experimental>=0.3"]
-rerank = ["langchain-cohere>=0.3"]
+rerank = ["langchain-cohere>=0.3", "flashrank>=0.2"]
 dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11", "types-PyYAML"]
 all = ["ragchatbot[openai,anthropic,local,faiss,qdrant,pgvector,docs,semantic,rerank]"]
 

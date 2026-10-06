@@ -6,6 +6,7 @@ import os
 from collections.abc import Callable
 from dataclasses import replace
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from rag_chatbot.config.schema import RerankerConfig
@@ -21,6 +22,8 @@ RerankerFactory = Callable[[RerankerConfig, LLMGetter], Reranker]
 RERANKERS: Registry[RerankerFactory] = Registry("reranker")
 
 DEFAULT_COHERE_MODEL = "rerank-v3.5"
+DEFAULT_FLASHRANK_MODEL = "ms-marco-TinyBERT-L-2-v2"
+FLASHRANK_CACHE = Path.home() / ".cache" / "flashrank"
 
 
 def build_reranker(cfg: RerankerConfig, get_llm: LLMGetter) -> Reranker:
@@ -49,6 +52,32 @@ def _cross(cfg: RerankerConfig, get_llm: LLMGetter) -> Reranker:
             return chunks
         scores = _cross_encoder(cfg.model).predict([(question, c.text) for c in chunks])
         return _apply(chunks, list(scores), cfg.top_n, "rerank:cross_encoder")
+
+    return run
+
+
+@lru_cache(maxsize=2)
+def _flashrank(model: str) -> Any:
+    flashrank = require("flashrank", "rerank")
+    FLASHRANK_CACHE.mkdir(parents=True, exist_ok=True)
+    return flashrank.Ranker(model_name=model, cache_dir=str(FLASHRANK_CACHE))
+
+
+@RERANKERS.register("flashrank")
+def _flash(cfg: RerankerConfig, get_llm: LLMGetter) -> Reranker:
+    # the default reranker.model is a HuggingFace cross-encoder; use FlashRank's default instead
+    model = DEFAULT_FLASHRANK_MODEL if "/" in cfg.model else cfg.model
+
+    def run(question: str, chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
+        if not chunks:
+            return chunks
+        request = require("flashrank", "rerank").RerankRequest(
+            query=question, passages=[{"id": i, "text": c.text} for i, c in enumerate(chunks)]
+        )
+        scores = [0.0] * len(chunks)
+        for result in _flashrank(model).rerank(request):
+            scores[int(result["id"])] = float(result["score"])
+        return _apply(chunks, scores, cfg.top_n, "rerank:flashrank")
 
     return run
 

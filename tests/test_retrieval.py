@@ -205,3 +205,25 @@ def test_llm_extract(setup, fake_llm):
 def test_has_postprocess(setup):
     assert not setup().has_postprocess
     assert setup("compression.type=redundant_filter").has_postprocess
+
+
+def test_flashrank_reranker(setup, monkeypatch):
+    pytest.importorskip("flashrank")
+    import rag_chatbot.retrieval.rerankers as rr
+
+    seen = {}
+
+    class FakeRanker:
+        def rerank(self, request):
+            seen["query"] = request.query
+            # favour the longest passage, return in arbitrary order
+            return [{"id": p["id"], "score": len(p["text"]) / 1000} for p in request.passages]
+
+    monkeypatch.setattr(rr, "_flashrank", lambda model: FakeRanker())
+    rp = setup("reranker.type=flashrank", "reranker.top_n=2", "retrieval.k=4")
+    chunks = rp.search(["coffee"])
+    out = rp.postprocess("coffee espresso", chunks)
+    assert seen["query"] == "coffee espresso"
+    assert len(out) == 2 and out[0].source == "rerank:flashrank"
+    assert len(out[0].text) == max(len(c.text) for c in chunks)
+    assert out[0].score >= out[1].score

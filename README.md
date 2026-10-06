@@ -67,7 +67,7 @@ are rejected with a precise message. Sample configs:
 | `vector_store` | `chroma`, `faiss`, `qdrant` (local or server), `pgvector`, `memory`; collection, distance |
 | `retrieval` | `dense`, `sparse` (BM25), `hybrid` (RRF or weighted), `parent` (small-to-big); `similarity`, `mmr`, `threshold`; k, fetch_k, default filters |
 | `query_transform` | `none`, `rewrite`, `multi_query`, `hyde`, `step_back`; follow-up condensing |
-| `reranker` | `none`, `cross_encoder`, `cohere`, `llm`; top_n |
+| `reranker` | `none`, `cross_encoder`, `flashrank` (fast, local, no API key), `cohere`, `llm`; top_n |
 | `compression` | `none`, `embeddings_filter`, `redundant_filter`, `llm_extract` |
 | `generation` | prompt template (built-in or file), context token budget, citation style, refuse vs. general knowledge, document grading, self-check, retries |
 | `memory` | `none`, `buffer`, `window`, `summary`; in-memory or SQLite sessions |
