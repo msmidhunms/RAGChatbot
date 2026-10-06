@@ -98,15 +98,30 @@ Filters use `key=value` (equality) or operators: `-f 'page={$gte: 3}'`, `-f 'sou
 
 ## Evaluation
 
-A dataset is JSONL with `question`, optional `ground_truth` and `expected_sources` (path suffixes):
+Evaluations score retrieval, answers and robustness on a QA dataset and compare configs side by side.
+A bundled benchmark (`evals/benchmark/`: 10 documents about the fictional company Nimbus Robotics and
+40 questions) works out of the box; see [`evals/README.md`](evals/README.md) for the dataset format.
 
-```json
-{"question": "Which planet is the hottest?", "ground_truth": "Venus", "expected_sources": ["planets.md"]}
+```bash
+rag eval run --offline                                  # no API key: deterministic models, bundled benchmark
+rag eval run -c configs/eval.yaml --ingest-corpus --judge   # real LLM + embeddings, LLM-judge metrics
+rag eval run -c configs/default.yaml -c configs/advanced.yaml --ingest-corpus   # compare configs
+rag eval run --fail-under 'hit_rate>=0.8' --fail-under 'unanswerable.refusal_accuracy>=0.9'   # exit 3
+rag eval generate -o data/eval/mine.jsonl --n 40        # questions from your own indexed documents
+rag eval report data/eval/eval-20260101-120000.json     # show a saved report again
 ```
 
-Retrieval metrics (`hit_rate`, `mrr`, `recall`) need no LLM. `faithfulness`, `answer_relevance` and
-`correctness` use an LLM judge (`evaluation.judge_llm`, defaulting to `llm`). Reports are written to
-`evaluation.output_dir`.
+| Group | Metrics | Needs |
+|---|---|---|
+| Retrieval | `hit_rate`, `mrr`, `recall`, `precision`, `ndcg`, `evidence_recall`, `filter_compliance` | nothing |
+| Answer | `exact_match`, `token_f1`, `keyword_coverage`, `citation_validity`, `citation_precision` | an answer |
+| Robustness | `refusal_accuracy` (+ `false_refusal_rate`, `missed_refusal_rate`), conversational and filtered questions | an answer |
+| LLM judge | `faithfulness`, `answer_relevance`, `correctness`, `context_recall`, `context_precision` | `--judge` |
+
+Every run reports scores per question category, latency (p50/p95) and token usage, and writes
+`eval-<timestamp>.json` plus a Markdown report (including the weakest questions) to `evaluation.output_dir`.
+Gates come from `evaluation.gates` and `--fail-under`. `pytest evals` runs the offline benchmark as a
+regression suite.
 
 ## Python API
 

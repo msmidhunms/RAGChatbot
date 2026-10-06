@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import math
 import re
 import shutil
 from collections.abc import Callable, Iterator
@@ -12,7 +10,6 @@ from typing import Any
 
 import pytest
 from langchain_core.callbacks import CallbackManagerForLLMRun
-from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
@@ -20,32 +17,14 @@ from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel
 
 from rag_chatbot.config import load_config
+from rag_chatbot.evaluation.offline import HashingEmbeddings
 
 FIXTURES = Path(__file__).parent / "fixtures"
 _WORD = re.compile(r"[a-z0-9]+")
 
 
-class KeywordEmbeddings(Embeddings):
-    """Bag-of-words hashed into ``size`` buckets: texts sharing words are similar."""
-
-    def __init__(self, size: int = 256) -> None:
-        self.size = size
-        self.calls = 0
-
-    def _vec(self, text: str) -> list[float]:
-        vec = [0.0] * self.size
-        for word in _WORD.findall(text.lower()):
-            if len(word) > 2:
-                vec[int(hashlib.md5(word.encode()).hexdigest(), 16) % self.size] += 1.0
-        norm = math.sqrt(sum(x * x for x in vec)) or 1.0
-        return [x / norm for x in vec]
-
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        self.calls += 1
-        return [self._vec(t) for t in texts]
-
-    def embed_query(self, text: str) -> list[float]:
-        return self._vec(text)
+# shared with the offline evaluation mode
+KeywordEmbeddings = HashingEmbeddings
 
 
 Responder = Callable[[list[BaseMessage]], str]

@@ -16,6 +16,7 @@ from typing import Annotated, Any
 import typer
 from pydantic import BaseModel, Field
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from rag_chatbot.config import RAGConfig, dump_config, load_config, missing_env_vars
@@ -27,7 +28,9 @@ app = typer.Typer(help="Configurable RAG chatbot.", no_args_is_help=True, pretty
 config_app = typer.Typer(help="Inspect and validate configuration.", no_args_is_help=True)
 store_app = typer.Typer(help="Inspect and maintain the vector store.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
+eval_app = typer.Typer(help="Evaluate retrieval and answer quality.", no_args_is_help=True)
 app.add_typer(store_app, name="store")
+app.add_typer(eval_app, name="eval")
 
 console = Console()
 err_console = Console(stderr=True)
@@ -412,44 +415,167 @@ def store_delete(
 
 
 # --------------------------------------------------------------------- eval
-@app.command("eval")
-def eval_command(
+@eval_app.command("run")
+def eval_run(
     configs: Annotated[
         list[Path] | None, typer.Option("--config", "-c", help="Config to evaluate; repeat to compare.")
     ] = None,
     dataset: Annotated[Path | None, typer.Option(help="QA JSONL (default: evaluation.dataset).")] = None,
+    ingest_corpus: Annotated[
+        bool, typer.Option("--ingest-corpus", help="Ingest evaluation.corpus before evaluating.")
+    ] = False,
     ingest_dir: Annotated[
         list[str] | None, typer.Option("--ingest", help="Ingest these sources before evaluating.")
     ] = None,
+    metrics: Annotated[
+        str | None, typer.Option(help="Comma-separated metrics (default: evaluation.metrics).")
+    ] = None,
+    category: Annotated[
+        list[str] | None, typer.Option("--category", help="Only these question categories. Repeatable.")
+    ] = None,
+    limit: Annotated[int | None, typer.Option(help="Evaluate at most N questions.")] = None,
+    judge: Annotated[bool, typer.Option("--judge", help="Add the LLM-judge metrics.")] = False,
+    offline: Annotated[
+        bool,
+        typer.Option(
+            "--offline", help="No API keys: hashing embeddings, extractive answers, in-memory store."
+        ),
+    ] = False,
     fail_under: Annotated[
         list[str] | None,
         typer.Option("--fail-under", help="Quality gate such as hit_rate>=0.8; exit code 3 if it fails."),
     ] = None,
+    report_dir: Annotated[
+        Path | None, typer.Option(help="Where to write reports (default: evaluation.output_dir).")
+    ] = None,
     set_: SetOpt = None,
 ) -> None:
     """Score retrieval and answers on a QA dataset; compare several configs side by side."""
-    from rag_chatbot.evaluation.dataset import load_dataset
+    from rag_chatbot.evaluation.dataset import filter_items, load_dataset
     from rag_chatbot.evaluation.gates import check_gates, parse_gates
+    from rag_chatbot.evaluation.metrics import METRICS
+    from rag_chatbot.evaluation.offline import OFFLINE_UNSUPPORTED_CATEGORIES, build_offline_pipeline
     from rag_chatbot.evaluation.report import write_reports
     from rag_chatbot.evaluation.runner import run_eval
 
     paths: list[Path | None] = list(configs) if configs else [None]
     first = _load(paths[0], set_)
+    selected = [m.strip() for m in metrics.split(",") if m.strip()] if metrics else None
     with _errors():
         gates = parse_gates([*first.evaluation.gates, *(fail_under or [])])
-        items = load_dataset(dataset or first.evaluation.dataset)
-        reports = run_eval(paths, items, overrides=set_ or [], ingest=ingest_dir)
+        items = filter_items(load_dataset(dataset or first.evaluation.dataset), category, limit)
+        factory = None
+        if offline:
+            skipped = [i for i in items if i.category in OFFLINE_UNSUPPORTED_CATEGORIES]
+            items = [i for i in items if i.category not in OFFLINE_UNSUPPORTED_CATEGORIES]
+            base = selected or list(first.evaluation.metrics)
+            selected = [m for m in base if not METRICS[m].needs_judge]
+            judge = False
+            if skipped or len(selected) < len(base):
+                console.print(
+                    f"[yellow]offline: skipped {len(skipped)} conversational questions and "
+                    f"{len(base) - len(selected)} LLM-judge metrics[/yellow]"
+                )
+            factory = build_offline_pipeline
+        ingest = [*(ingest_dir or []), *([str(first.evaluation.corpus)] if ingest_corpus else [])]
+        if offline and not ingest:  # the offline store is in-memory and starts empty
+            ingest = [str(first.evaluation.corpus)]
+        reports = run_eval(
+            paths,
+            items,
+            overrides=set_ or [],
+            ingest=ingest or None,
+            metrics=selected,
+            judge=judge,
+            pipeline_factory=factory,
+        )
         gate_results = check_gates(reports, gates)
-        json_path, md_path = write_reports(reports, first.evaluation.output_dir, gate_results)
+        json_path, md_path = write_reports(reports, report_dir or first.evaluation.output_dir, gate_results)
+    _print_eval(reports)
+    console.print(f"[dim]report: {md_path}\ndetails: {json_path}[/dim]")
+    _print_gates(gate_results)
+
+
+@eval_app.command("generate")
+def eval_generate(
+    output: Annotated[Path, typer.Option("--output", "-o", help="Where to write the generated JSONL.")],
+    n: Annotated[int, typer.Option("--n", min=1, help="Number of questions to generate.")] = 30,
+    category: Annotated[
+        list[str] | None,
+        typer.Option("--category", help="factual, multi_hop, unanswerable, conversational. Repeatable."),
+    ] = None,
+    seed: Annotated[int, typer.Option(help="Sampling seed (same seed, same chunks).")] = 0,
+    ingest_dir: Annotated[
+        list[str] | None, typer.Option("--ingest", help="Ingest these sources first.")
+    ] = None,
+    config: ConfigOpt = None,
+    set_: SetOpt = None,
+) -> None:
+    """Generate QA pairs from your indexed documents with the configured LLM, for review."""
+    from rag_chatbot.evaluation.dataset import save_dataset
+    from rag_chatbot.evaluation.generate import GENERATABLE, DatasetGenerator
+
+    cfg = _load(config, set_)
+    with _errors():
+        pipe = _pipeline(cfg)
+        if ingest_dir:
+            pipe.ingest(ingest_dir)
+        result = DatasetGenerator(pipe, seed=seed).generate(n, category or list(GENERATABLE))
+        path = save_dataset(result.items, output)
+    counts = {
+        c: sum(i.category == c for i in result.items) for c in sorted({i.category for i in result.items})
+    }
+    console.print(f"wrote {len(result.items)} questions to {path}: {counts}")
+    if result.rejected:
+        console.print(f"[dim]{len(result.rejected)} generated questions were rejected by validation[/dim]")
+    console.print("[yellow]review the questions and answers before using them as a benchmark[/yellow]")
+
+
+@eval_app.command("report")
+def eval_report(
+    report: Annotated[Path, typer.Argument(help="eval-*.json written by `rag eval run`.")],
+    markdown: Annotated[bool, typer.Option("--markdown", help="Print the Markdown report instead.")] = False,
+) -> None:
+    """Show a saved evaluation report again."""
+    from rag_chatbot.evaluation.report import load_reports, render_markdown
+
+    with _errors():
+        reports, gates = load_reports(report)
+    if markdown:
+        console.print(render_markdown(reports, gates), markup=False, highlight=False)
+        return
+    _print_eval(reports)
+    for g in gates:
+        colour = "green" if g.passed else "red"
+        console.print(
+            f"[{colour}]{'pass' if g.passed else 'FAIL'}[/{colour}] {escape(g.message)}", highlight=False
+        )
+
+
+def _print_eval(reports: Sequence[Any]) -> None:
+    if not reports:
+        return
     metrics = [m for m in reports[0].selected_metrics if any(m in r.metrics for r in reports)]
-    table = Table("metric", *[r.name for r in reports], title=f"Evaluation ({len(items)} questions)")
+    table = Table("metric", *[r.name for r in reports], title=f"Evaluation ({reports[0].items} questions)")
     for m in metrics:
         table.add_row(m, *[f"{r.metrics[m]:.3f}" if m in r.metrics else "-" for r in reports])
     table.add_row("latency p95 (s)", *[str(r.latency.get("latency_p95", "-")) for r in reports])
     table.add_row("errors", *[str(r.errors) for r in reports])
     console.print(table)
-    console.print(f"[dim]report: {md_path}\ndetails: {json_path}[/dim]")
-    _print_gates(gate_results)
+    for r in reports:
+        cats = list(r.by_category)
+        if len(cats) < 2:
+            continue
+        per = Table(title=f"{r.name} by category")
+        per.add_column("metric", no_wrap=True)
+        for c in cats:
+            per.add_column(f"{c} ({r.counts.get(c, 0)})")
+        for m in metrics:
+            if any(m in r.by_category[c] for c in cats):
+                per.add_row(
+                    m, *[f"{r.by_category[c][m]:.3f}" if m in r.by_category[c] else "-" for c in cats]
+                )
+        console.print(per)
 
 
 def _print_gates(results: Sequence[Any]) -> None:
@@ -457,7 +583,9 @@ def _print_gates(results: Sequence[Any]) -> None:
         return
     for g in results:
         colour = "green" if g.passed else "red"
-        console.print(f"[{colour}]{'pass' if g.passed else 'FAIL'}[/{colour}] {g.message}", highlight=False)
+        console.print(
+            f"[{colour}]{'pass' if g.passed else 'FAIL'}[/{colour}] {escape(g.message)}", highlight=False
+        )
     if any(not g.passed for g in results):
         raise typer.Exit(3)
 

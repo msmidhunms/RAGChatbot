@@ -1,4 +1,5 @@
 import json
+import pathlib
 
 import pytest
 from langchain_core.language_models import FakeListChatModel
@@ -164,6 +165,7 @@ def test_eval_command(e2e, monkeypatch, keyword_embeddings, fake_llm, tmp_path, 
     monkeypatch.setattr(RAGPipeline, "from_config", classmethod(from_config))
     result = e2e(
         "eval",
+        "run",
         "--dataset",
         str(FIXTURES / "qa.jsonl"),
         "--ingest",
@@ -177,7 +179,7 @@ def test_eval_command(e2e, monkeypatch, keyword_embeddings, fake_llm, tmp_path, 
     assert "hit_rate" in result.output and "faithfulness" in result.output
     assert list((tmp_path / "eval").glob("eval-*.json")) and list((tmp_path / "eval").glob("eval-*.md"))
     failing = e2e(
-        "eval", "--dataset", str(FIXTURES / "qa.jsonl"), "--ingest", str(corpus),
+        "eval", "run", "--dataset", str(FIXTURES / "qa.jsonl"), "--ingest", str(corpus),
         "--set", f"evaluation.output_dir={tmp_path / 'eval'}", "--set", "evaluation.metrics=[hit_rate]",
         "--fail-under", "hit_rate>=1.5",
     )  # fmt: skip
@@ -228,3 +230,61 @@ def test_store_stats_needs_no_api_key(tmp_path, keyword_embeddings, corpus):
     assert deleted.exit_code == 0, deleted.output
     query = runner.invoke(cli.app, ["retrieve", "espresso", *args])
     assert query.exit_code == 1 and "GOOGLE_API_KEY" in query.output
+
+
+# ------------------------------------------------------------- eval group
+BENCHMARK = pathlib.Path(__file__).resolve().parent.parent / "evals" / "benchmark"
+BENCH_SETS = [
+    "--set", f"evaluation.dataset={BENCHMARK / 'qa.jsonl'}",
+    "--set", f"evaluation.corpus={BENCHMARK / 'corpus'}",
+]  # fmt: skip
+
+
+def test_eval_run_offline_and_report(tmp_path):
+    out = tmp_path / "reports"
+    result = runner.invoke(
+        cli.app,
+        ["eval", "run", "--offline", "--report-dir", str(out), "--set", f"app.data_dir={tmp_path / 'data'}",
+         "--category", "factual", "--category", "unanswerable", "--fail-under", "hit_rate>=0.5", *BENCH_SETS],
+    )  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert "hit_rate" in result.output and "factual" in result.output and "pass" in result.output
+    md = next(out.glob("eval-*.md")).read_text()
+    assert "## By category - defaults" in md and "unanswerable" in md
+    json_report = next(out.glob("eval-*.json"))
+    shown = runner.invoke(cli.app, ["eval", "report", str(json_report)])
+    assert shown.exit_code == 0 and "hit_rate" in shown.output
+    as_md = runner.invoke(cli.app, ["eval", "report", str(json_report), "--markdown"])
+    assert as_md.output.startswith("# Evaluation report")
+
+
+def test_eval_run_offline_skips_llm_only_work(tmp_path):
+    result = runner.invoke(
+        cli.app,
+        ["eval", "run", "--offline", "--judge", "--limit", "40", "--report-dir", str(tmp_path),
+         "--set", f"app.data_dir={tmp_path / 'data'}", *BENCH_SETS],
+    )  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert "skipped 5 conversational questions" in result.output
+    assert "faithfulness" not in result.output
+
+
+def test_eval_generate_command(e2e, corpus, fake_llm, tmp_path):
+    from rag_chatbot.generation.schemas import GeneratedQA
+
+    counter = iter(range(100))
+
+    def factual(messages):
+        text = messages[-1].content.split("Excerpt:\n", 1)[1]
+        n = next(counter)
+        return GeneratedQA(
+            question=f"Topic{n} item{n} question?", answer="a", evidence=[" ".join(text.split()[:5])]
+        )
+
+    fake_llm.structured["GeneratedQA"] = factual
+    out = tmp_path / "gen.jsonl"
+    result = e2e(
+        "eval", "generate", "-o", str(out), "--n", "3", "--category", "factual", "--ingest", str(corpus)
+    )
+    assert result.exit_code == 0, result.output
+    assert "wrote 3 questions" in result.output and len(out.read_text().splitlines()) == 3
