@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import csv
 import fnmatch
+import io
 import json
 import urllib.request
 from collections.abc import Callable, Iterable
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 from urllib.parse import urljoin, urlparse
 
 from langchain_core.documents import Document
@@ -45,6 +46,8 @@ DEFAULT_LOADERS = {
 
 USER_AGENT = "ragchatbot/0.1 (+https://github.com/msmidhunms/RAGChatbot)"
 MAX_URL_PAGES = 50
+MAX_URL_BYTES = 20 * 1024 * 1024  # per response
+_TEXT_TYPES = ("text/", "application/json", "application/xml", "application/xhtml")
 
 
 class UnsupportedSourceError(RAGError):
@@ -190,8 +193,12 @@ def load_text(source: str, cfg: IngestionConfig) -> list[Document]:
 
 @LOADERS.register("pypdf")
 def load_pypdf(source: str, cfg: IngestionConfig) -> list[Document]:
-    pypdf = require("pypdf")
-    reader = pypdf.PdfReader(source)
+    return pdf_pages(source, source)
+
+
+def pdf_pages(data: str | BinaryIO, source: str) -> list[Document]:
+    """One Document per page (``metadata.page`` is 1-based) from a path or binary stream."""
+    reader = require("pypdf").PdfReader(data)
     return [
         Document(page_content=page.extract_text() or "", metadata={"source": source, "page": i})
         for i, page in enumerate(reader.pages, start=1)
@@ -224,12 +231,21 @@ def load_html(source: str, cfg: IngestionConfig) -> list[Document]:
     return [Document(page_content=text, metadata=meta)]
 
 
-def _fetch(url: str, timeout: float = 20.0) -> tuple[str, str]:
+def _fetch(url: str, timeout: float = 20.0) -> tuple[bytes, str, str]:
+    """Return (body, content type, charset); bodies over ``MAX_URL_BYTES`` are refused."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - user supplied source
-        content_type = resp.headers.get("Content-Type", "")
+        content_type = resp.headers.get("Content-Type", "").lower()
         charset = resp.headers.get_content_charset() or "utf-8"
-        return resp.read().decode(charset, errors="replace"), content_type
+        body = resp.read(MAX_URL_BYTES + 1)
+    if len(body) > MAX_URL_BYTES:
+        limit = MAX_URL_BYTES // (1024 * 1024)
+        raise RAGError(f"{url} is larger than {limit} MB; download it and ingest the file instead")
+    return body, content_type, charset
+
+
+def _is_pdf(url: str, content_type: str, body: bytes) -> bool:
+    return "pdf" in content_type or urlparse(url).path.lower().endswith(".pdf") or body.startswith(b"%PDF")
 
 
 @LOADERS.register("url")
@@ -245,20 +261,25 @@ def load_url(source: str, cfg: IngestionConfig) -> list[Document]:
         if url in seen:
             continue
         seen.add(url)
-        body, content_type = _fetch(url)
-        if "html" in content_type or body.lstrip().lower().startswith(("<!doctype html", "<html")):
-            text, title, links = html_to_text(body)
+        body, content_type, charset = _fetch(url)
+        if _is_pdf(url, content_type, body):
+            docs.extend(pdf_pages(io.BytesIO(body), url))
+            continue
+        text = body.decode(charset, errors="replace")
+        if "html" in content_type or text.lstrip().lower().startswith(("<!doctype html", "<html")):
+            page_text, title, links = html_to_text(text)
             meta: dict[str, Any] = {"source": url}
             if title:
                 meta["title"] = title
-            docs.append(Document(page_content=text, metadata=meta))
+            docs.append(Document(page_content=page_text, metadata=meta))
             if depth < max_depth:
                 for link in links:
                     nxt = urljoin(url, link)
                     if urlparse(nxt).netloc == host and nxt.startswith(("http://", "https://")):
                         queue.append((nxt, depth + 1))
-        else:
-            docs.append(Document(page_content=body, metadata={"source": url}))
+        elif not content_type or content_type.startswith(_TEXT_TYPES):
+            docs.append(Document(page_content=text, metadata={"source": url}))
+        # other binary content (images, archives, ...) is skipped
     return docs
 
 

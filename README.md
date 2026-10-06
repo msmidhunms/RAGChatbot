@@ -62,7 +62,7 @@ are rejected with a precise message. Sample configs:
 |---|---|
 | `llm` | `google_genai`, `openai`, `anthropic`, `ollama`; model, temperature, max tokens, timeout, retries, structured output |
 | `embeddings` | `google`, `openai`, `ollama`, `huggingface`; batch size, normalization, persistent cache |
-| `ingestion` | sources, glob/exclude, per-extension loader, CSV/JSON field selection, URL crawling depth, cleaning, dedupe, incremental |
+| `ingestion` | sources, glob/exclude, per-extension loader, CSV/JSON field selection, URL crawling (same host, HTML/PDF/text, 20 MB per response), cleaning, dedupe, incremental |
 | `splitter` | `recursive`, `token`, `markdown_header`, `html_header`, `semantic`; size, overlap, separators |
 | `vector_store` | `chroma`, `faiss`, `qdrant` (local or server), `pgvector`, `memory`; collection, distance |
 | `retrieval` | `dense`, `sparse` (BM25), `hybrid` (RRF or weighted), `parent` (small-to-big); `similarity`, `mmr`, `threshold`; k, fetch_k, default filters |
