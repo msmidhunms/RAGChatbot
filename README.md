@@ -14,6 +14,7 @@ question ─► condense (memory) ─► transform ─► retrieve (dense | BM25
 ## Install
 
 ```bash
+pip install -r requirements.txt     # locked core dependencies (compiled by uv from requirements.in)
 pip install -e .                     # core: Gemini, Chroma, BM25, PDF/TXT/MD/HTML/CSV/JSON
 pip install -e '.[openai,anthropic]' # more LLM / embedding providers
 pip install -e '.[local]'            # Ollama, HuggingFace embeddings, cross-encoder reranker

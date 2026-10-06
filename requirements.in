@@ -1,24 +1,23 @@
 # Top level dependencies. requirements.txt is compiled from this file:
-#   uv pip compile requirements.in -o requirements.txt --python-version 3.12 --exclude-newer 2025-07-31T23:59:59Z
+#   uv pip compile requirements.in -o requirements.txt --python-version 3.12 --exclude-newer <date> --upgrade
+# Optional backends (OpenAI, Anthropic, Ollama, Qdrant, PGVector, ...) are extras in pyproject.toml.
 
 # core
 langchain
 langchain-core
-langchain-community
 langchain-text-splitters
 langgraph
 langgraph-checkpoint-sqlite
 langsmith
 pydantic
-pydantic-settings
 python-dotenv
 pyyaml
+numpy
 
 # llm + embeddings
 langchain-google-genai
 
 # vector stores
-langchain-chroma
 chromadb
 faiss-cpu
 
@@ -29,7 +28,6 @@ flashrank
 # document loading
 pypdf
 docx2txt
-beautifulsoup4
 tiktoken
 
 # cli

@@ -9,6 +9,15 @@ from rag_chatbot.core.exceptions import MissingCredentialsError
 from rag_chatbot.providers import build_embeddings, build_llm, embedding_namespace
 from rag_chatbot.providers.embeddings import EMBEDDING_PROVIDERS
 
+# provider integration packages; the optional ones are skipped when not installed
+PACKAGES = {
+    "google_genai": "langchain_google_genai",
+    "google": "langchain_google_genai",
+    "openai": "langchain_openai",
+    "anthropic": "langchain_anthropic",
+    "ollama": "langchain_ollama",
+}
+
 KEYS = {"GOOGLE_API_KEY": "test", "OPENAI_API_KEY": "test", "ANTHROPIC_API_KEY": "test"}
 
 
@@ -44,6 +53,7 @@ def cfg(*overrides, tmp_path=None):
     ],
 )
 def test_build_llm_providers(api_keys, provider, model, cls, checks):
+    pytest.importorskip(PACKAGES[provider])
     llm = build_llm(
         cfg(f"llm.provider={provider}", f"llm.model={model}", "llm.max_tokens=256", "llm.timeout=30").llm
     )
@@ -54,6 +64,7 @@ def test_build_llm_providers(api_keys, provider, model, cls, checks):
 
 
 def test_build_llm_ollama_base_url():
+    pytest.importorskip("langchain_ollama")
     llm = build_llm(cfg("llm.provider=ollama", "llm.model=llama3.1", "llm.base_url=http://gpu:11434").llm)
     assert llm.base_url == "http://gpu:11434"
 
@@ -64,6 +75,7 @@ def test_build_llm_missing_key():
 
 
 def test_build_llm_ollama_needs_no_key():
+    pytest.importorskip("langchain_ollama")
     assert build_llm(cfg("llm.provider=ollama", "llm.model=llama3.1").llm, env={}) is not None
 
 
@@ -77,6 +89,7 @@ def test_build_llm_ollama_needs_no_key():
     ],
 )
 def test_build_embeddings_providers(api_keys, provider, model, cls):
+    pytest.importorskip(PACKAGES[provider])
     emb = build_embeddings(
         cfg(
             f"embeddings.provider={provider}",
