@@ -29,7 +29,7 @@ def test_default_yaml_matches_builtin_defaults():
     assert dump_config(load_config(CONFIGS / "default.yaml", env={})) == dump_config(RAGConfig())
 
 
-@pytest.mark.parametrize("name", ["default.yaml", "local.yaml", "advanced.yaml"])
+@pytest.mark.parametrize("name", ["default.yaml", "local.yaml", "advanced.yaml", "eval.yaml"])
 def test_sample_configs_are_valid(name):
     load_config(CONFIGS / name, env={})
 

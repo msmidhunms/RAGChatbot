@@ -1,0 +1,8 @@
+{
+  "faq": [
+    {"topic": "shipping", "question": "How long does shipping take?", "answer": "Orders within the EU are delivered in 5 to 7 business days. Express shipping in 2 business days costs 60 EUR."},
+    {"topic": "returns", "question": "Can I return a product?", "answer": "Unused products can be returned within 30 days of delivery for a full refund."},
+    {"topic": "regulation", "question": "Do I need a permit to fly the Drone X1?", "answer": "Customers are responsible for local aviation rules. In the EU the Drone X1 falls under the open category, subcategory A2."},
+    {"topic": "data", "question": "Can I export my data?", "answer": "Flight logs can be exported as CSV from Fleet Cloud at any time, and fleet maps as GeoJSON."}
+  ]
+}

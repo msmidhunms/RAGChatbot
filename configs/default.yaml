@@ -127,8 +127,11 @@ memory:
   path: ./data/sessions.sqlite
 
 evaluation:
-  dataset: ./tests/fixtures/qa.jsonl
+  dataset: ./evals/benchmark/qa.jsonl   # bundled Nimbus Robotics benchmark (see evals/README.md)
+  corpus: ./evals/benchmark/corpus      # ingested by `rag eval run --ingest-corpus`
   metrics: [hit_rate, mrr, faithfulness, answer_relevance]
+  k: null                         # cut-off for @k metrics; null = retrieval.k
+  gates: []                       # quality gates, e.g. ["hit_rate>=0.8", "latency_p95<=5"]
   judge_llm: null                 # null = reuse llm
   output_dir: ./data/eval
 

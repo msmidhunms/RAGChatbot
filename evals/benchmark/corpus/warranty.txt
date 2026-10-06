@@ -1,0 +1,12 @@
+Nimbus Robotics Hardware Warranty
+
+All Nimbus hardware comes with a 24-month limited warranty from the date of delivery.
+Batteries are covered for 12 months or 300 charge cycles, whichever comes first.
+Water damage is only covered when the device was used within its rated IP protection level.
+Crash damage caused by pilot error is not covered.
+
+Extended warranty
+
+The Nimbus Care extended warranty adds one more year, for three years of coverage in total.
+Nimbus Care costs 390 EUR per device and must be purchased within 60 days of delivery.
+Nimbus Care includes one accidental damage replacement.

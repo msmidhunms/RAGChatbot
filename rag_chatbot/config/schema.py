@@ -267,8 +267,11 @@ def _default_metrics() -> list[Metric]:
 
 
 class EvaluationConfig(StrictModel):
-    dataset: Path = Path("./tests/fixtures/qa.jsonl")
+    dataset: Path = Path("./evals/benchmark/qa.jsonl")
+    corpus: Path = Path("./evals/benchmark/corpus")  # ingested by `rag eval run --ingest-corpus`
     metrics: list[Metric] = Field(default_factory=_default_metrics)
+    k: int | None = Field(None, gt=0)  # cut-off for @k retrieval metrics; None = retrieval.k
+    gates: list[str] = Field(default_factory=list)  # e.g. ["hit_rate>=0.8", "latency_p95<=5"]
     judge_llm: LLMConfig | None = None  # None -> reuse the main llm
     output_dir: Path = Path("./data/eval")
 

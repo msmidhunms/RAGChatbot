@@ -1,0 +1,25 @@
+# Evaluation setup for the bundled Nimbus Robotics benchmark.
+#   rag eval run -c configs/eval.yaml --ingest-corpus
+# Only the differences from the built-in defaults are listed.
+
+vector_store:
+  collection: nimbus-benchmark      # keep benchmark vectors apart from your own documents
+
+ingestion:
+  json:
+    jq_schema: ".faq[]"             # one document per FAQ entry
+
+evaluation:
+  dataset: ./evals/benchmark/qa.jsonl
+  corpus: ./evals/benchmark/corpus
+  metrics:
+    - hit_rate
+    - mrr
+    - recall
+    - faithfulness
+    - answer_relevance
+    - correctness
+  gates:
+    - hit_rate>=0.8
+    - mrr>=0.6
+    - faithfulness>=0.8

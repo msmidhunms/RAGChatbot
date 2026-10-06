@@ -1,0 +1,6 @@
+product,plan,price_eur,billing,notes
+Drone X1,hardware,4900,one-time,Includes two batteries and a carrying case
+Rover R2,hardware,7450,one-time,Includes charging dock
+Fleet Cloud Basic,subscription,49,per device per month,Live map and flight logs
+Fleet Cloud Pro,subscription,99,per device per month,Adds analytics and API access
+Fleet Cloud Enterprise,subscription,custom,annual contract,Includes SSO and dedicated support

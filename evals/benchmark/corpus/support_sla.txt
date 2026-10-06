@@ -1,0 +1,18 @@
+Nimbus Robotics Support Service Level Agreement
+
+Support plans
+
+Standard support: first response within one business day, available Monday to Friday, 08:00-18:00 CET.
+Priority support: first response within four hours during business days.
+Enterprise support: first response within one hour, available 24/7 including weekends and holidays.
+
+Fleet Cloud availability
+
+The Fleet Cloud portal has a monthly uptime commitment of 99.9 percent.
+For every 0.1 percent below the commitment, customers receive a service credit of 10 percent of the monthly fee.
+Planned maintenance is announced at least 72 hours in advance and does not count as downtime.
+
+Escalation
+
+Enterprise customers have a named technical account manager.
+Unresolved Priority tickets are escalated to an engineering lead after 24 hours.
