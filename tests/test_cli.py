@@ -170,6 +170,8 @@ def test_eval_command(e2e, monkeypatch, keyword_embeddings, fake_llm, tmp_path, 
         str(corpus),
         "--set",
         f"evaluation.output_dir={tmp_path / 'eval'}",
+        "--set",
+        "evaluation.metrics=[hit_rate, mrr, faithfulness]",  # judge metrics are opt-in
     )
     assert result.exit_code == 0, result.output
     assert "hit_rate" in result.output and "faithfulness" in result.output

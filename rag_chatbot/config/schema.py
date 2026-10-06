@@ -259,11 +259,23 @@ class MemoryConfig(StrictModel):
     path: Path = Path("./data/sessions.sqlite")
 
 
-Metric = Literal["hit_rate", "mrr", "recall", "faithfulness", "answer_relevance", "correctness"]
+Metric = Literal[
+    # retrieval (no LLM)
+    "hit_rate", "mrr", "recall", "precision", "ndcg", "evidence_recall", "filter_compliance",
+    # answer (no LLM judge)
+    "exact_match", "token_f1", "keyword_coverage", "citation_validity", "citation_precision",
+    "refusal_accuracy", "false_refusal_rate", "missed_refusal_rate",
+    # LLM judge
+    "faithfulness", "answer_relevance", "correctness", "context_recall", "context_precision",
+]  # fmt: skip
 
 
 def _default_metrics() -> list[Metric]:
-    return ["hit_rate", "mrr", "faithfulness", "answer_relevance"]
+    # everything that needs no LLM judge; add judge metrics in config or with --judge
+    return [
+        "hit_rate", "mrr", "recall", "precision", "ndcg", "evidence_recall", "filter_compliance",
+        "token_f1", "keyword_coverage", "citation_validity", "citation_precision", "refusal_accuracy",
+    ]  # fmt: skip
 
 
 class EvaluationConfig(StrictModel):

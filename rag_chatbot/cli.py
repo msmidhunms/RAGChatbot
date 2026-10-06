@@ -433,12 +433,12 @@ def eval_command(
         items = load_dataset(dataset or first.evaluation.dataset)
         reports = run_eval(paths, items, overrides=set_ or [], ingest=ingest_dir)
         out = save_reports(reports, first.evaluation.output_dir)
-    metrics = sorted({m for r in reports for m in r.metrics})
-    table = Table("config", *metrics, "errors", "seconds", title=f"Evaluation ({len(items)} questions)")
-    for r in reports:
-        table.add_row(
-            r.name, *[f"{r.metrics.get(m, float('nan')):.3f}" for m in metrics], str(r.errors), str(r.seconds)
-        )
+    metrics = [m for m in reports[0].selected_metrics if any(m in r.metrics for r in reports)]
+    table = Table("metric", *[r.name for r in reports], title=f"Evaluation ({len(items)} questions)")
+    for m in metrics:
+        table.add_row(m, *[f"{r.metrics[m]:.3f}" if m in r.metrics else "-" for r in reports])
+    table.add_row("errors", *[str(r.errors) for r in reports])
+    table.add_row("seconds", *[str(r.seconds) for r in reports])
     console.print(table)
     console.print(f"[dim]details: {out}[/dim]")
 

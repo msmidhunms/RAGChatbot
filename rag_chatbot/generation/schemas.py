@@ -77,3 +77,6 @@ class JudgeScores(BaseModel):
     faithfulness: float = Field(ge=0, le=1)
     answer_relevance: float = Field(ge=0, le=1)
     correctness: float = Field(ge=0, le=1)
+    context_recall: float = Field(
+        1.0, ge=0, le=1, description="Share of the reference answer's facts present in the context"
+    )

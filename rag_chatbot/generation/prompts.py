@@ -145,6 +145,8 @@ JUDGE = _p(
     "You are a strict evaluator of a question-answering system. Score each criterion from 0.0 to 1.0.\n"
     "- faithfulness: the answer's claims are supported by the context\n"
     "- answer_relevance: the answer addresses the question\n"
-    "- correctness: the answer agrees with the reference answer (1.0 if no reference is given)",
+    "- correctness: the answer agrees with the reference answer (1.0 if no reference is given)\n"
+    "- context_recall: share of the facts in the reference answer that appear in the context "
+    "(1.0 if no reference is given)",
     "Question: {question}\n\nContext:\n{context}\n\nReference answer: {reference}\n\nAnswer:\n{answer}",
 )

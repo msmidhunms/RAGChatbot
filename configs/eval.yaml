@@ -15,11 +15,21 @@ evaluation:
   metrics:
     - hit_rate
     - mrr
-    - recall
+    - ndcg
+    - evidence_recall
+    - filter_compliance
+    - token_f1
+    - keyword_coverage
+    - citation_precision
+    - refusal_accuracy
     - faithfulness
     - answer_relevance
     - correctness
+    - context_recall
   gates:
     - hit_rate>=0.8
-    - mrr>=0.6
+    - filter_compliance>=1.0
+    - refusal_accuracy>=0.8
     - faithfulness>=0.8
+    - unanswerable.refusal_accuracy>=0.8
+    - latency_p95<=10
