@@ -1,0 +1,21 @@
+# Quality gates enforced by `pytest evals` (offline benchmark, no API key).
+# Measured on 2026-10-06 with hashing embeddings and the extractive baseline; each gate sits
+# slightly below the measured value. Re-measure with `pytest evals -s` after deliberate changes.
+
+common:                      # every retrieval strategy / search type
+  - hit_rate>=0.93           # measured 0.966
+  - filter_compliance>=1.0   # filters must always be respected
+  - unanswerable.refusal_accuracy>=1.0   # never answer an unanswerable question
+  - refusal_accuracy>=0.7    # measured 0.743 (the extractive baseline cannot combine facts)
+  - token_f1>=0.2            # measured 0.222
+  - keyword_coverage>=0.42   # measured 0.448
+  - citation_validity>=1.0
+  - citation_precision>=0.9  # measured 0.95-1.0
+
+strategies:                  # ranking quality differs per strategy
+  dense-similarity:  [mrr>=0.87, ndcg>=0.85, evidence_recall>=0.92]   # 0.897 0.879 0.948
+  dense-mmr:         [mrr>=0.85, ndcg>=0.81, evidence_recall>=0.89]   # 0.876 0.835 0.914
+  sparse-similarity: [mrr>=0.88, ndcg>=0.88, evidence_recall>=0.94]   # 0.908 0.905 0.966
+  sparse-mmr:        [mrr>=0.88, ndcg>=0.88, evidence_recall>=0.94]   # 0.908 0.905 0.966
+  hybrid-similarity: [mrr>=0.90, ndcg>=0.87, evidence_recall>=0.92]   # 0.931 0.898 0.948
+  hybrid-mmr:        [mrr>=0.89, ndcg>=0.85, evidence_recall>=0.92]   # 0.914 0.878 0.948

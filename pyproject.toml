@@ -51,7 +51,8 @@ all = ["ragchatbot[openai,anthropic,local,faiss,qdrant,pgvector,docs,semantic,re
 include = ["rag_chatbot*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests"]  # `pytest evals` runs the offline benchmark suite
+markers = ["evals: offline benchmark quality gates (run with `pytest evals`)"]
 addopts = "-q"
 
 [tool.ruff]
